@@ -12,24 +12,27 @@ casper.start(url);
 
 var totalPages = 0;
 
-casper.waitFor(function() {
+casper.waitFor(function() { // Wait for webpage to finish all AJAX calls
     var state = this.evaluate(function() {
         return document.readyState
     });
 
     return state == "complete"
-}, function then() {
+}, function then() { // Get total pages
     totalPagesString = this.evaluate(function() {
         return document.getElementById("searchResults_links").children[6].textContent;
     });
     
-    this.echo(parseInt(totalPagesString));
+    totalPages = parseInt(totalPagesString);
+    this.echo(totalPages + " pages to scrape.");
 });
 
 casper.then(function() {
     var results = this.evaluate(function() {
         return document.getElementById("searchResults");
     });
+
+    this.echo(results.outerHTML);
 });
 
 casper.run();
