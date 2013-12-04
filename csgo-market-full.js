@@ -10,6 +10,8 @@ var casper = require("casper").create({
 
 casper.start(url);
 
+var totalPages = 0;
+
 casper.waitFor(function() {
     var state = this.evaluate(function() {
         return document.readyState
@@ -17,11 +19,17 @@ casper.waitFor(function() {
 
     return state == "complete"
 }, function then() {
+    totalPagesString = this.evaluate(function() {
+        return document.getElementById("searchResults_links").children[6].textContent;
+    });
+    
+    this.echo(parseInt(totalPagesString));
+});
+
+casper.then(function() {
     var results = this.evaluate(function() {
         return document.getElementById("searchResults");
     });
-    
-    this.echo(results.outerHTML);
 });
 
 casper.run();
