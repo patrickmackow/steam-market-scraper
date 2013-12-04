@@ -1,4 +1,4 @@
-var url = "http://steamcommunity.com/market/search?q=appid%3A730#p102"
+var url = "http://steamcommunity.com/market/search?q=appid%3A730"
 
 // Casper settings
 var casper = require("casper").create({
@@ -10,10 +10,18 @@ var casper = require("casper").create({
 
 casper.start(url);
 
-casper.then(function() {
-    this.waitUntilVisible("a.market_listing_row_link", function() {
-        this.echo(this.getHTML("a.market_listing_row_link"));
+casper.waitFor(function() {
+    var state = this.evaluate(function() {
+        return document.readyState
     });
+
+    return state == "complete"
+}, function then() {
+    var results = this.evaluate(function() {
+        return document.getElementById("searchResults");
+    });
+    
+    this.echo(results.outerHTML);
 });
 
 casper.run();
