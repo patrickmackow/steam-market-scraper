@@ -54,10 +54,8 @@ casper.start(url, function() {
     if(!fs.isDirectory(scrapeDirectory)) {
         fs.makeDirectory(scrapeDirectory);
     }
-});
 
-// Get total pages
-casper.then(function() {
+    // Get total pages
     casper.waitFor(casper.pageReady, function() { 
         totalPages = this.getTotalPages();
         this.echo(totalPages + " pages to scrape.");
