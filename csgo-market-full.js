@@ -1,8 +1,10 @@
 "use strict";
 
+// Global variables
 var url = "http://steamcommunity.com/market/search?q=appid%3A730"
 var links = [];
 var totalPages = 0;
+var scrapeDirectory = "./csgo-pages/";
 
 // Casper settings
 var casper = require("casper").create({
@@ -12,6 +14,9 @@ var casper = require("casper").create({
         userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0"
     }
 });
+
+// FileSystem module
+var fs = require("fs");
 
 casper.pageReady = function() {
     var state = this.evaluate(function() {
@@ -27,9 +32,12 @@ casper.getItemRows = function() {
     });
 };
 
+casper.parsePage = function() {
+};
+
 casper.getCurrentPage = function() {
     return this.evaluate(function() {
-        return parseInt(docment.getElementsByClassName("market_paging_pagelink active")[0].textContent);
+        return parseInt(document.getElementsByClassName("market_paging_pagelink active")[0].textContent);
     });
 };
 
@@ -39,7 +47,11 @@ casper.getTotalPages = function() {
     });
 };
 
-casper.start(url);
+casper.start(url, function() {
+    if(!fs.isDirectory(scrapeDirectory)) {
+        fs.makeDirectory(scrapeDirectory);
+    }
+});
 
 casper.waitFor(casper.pageReady, function then() { // Get total pages
     totalPages = this.getTotalPages();
@@ -53,6 +65,7 @@ casper.then(function() {
     this.echo(links[0]);
 });
 
+/*
 casper.then(function() {
     for (var page = 1; page <= 2; page++) {
         this.echo(page);
@@ -87,6 +100,7 @@ casper.then(function() {
         });
     };
 });
+*/
 
 casper.then(function() {
     this.echo(links.length);
