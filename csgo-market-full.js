@@ -1,7 +1,7 @@
 "use strict";
 
 // Global variables
-var url = "http://steamcommunity.com/market/search?q=appid%3A730"
+var url = "http://steamcommunity.com/market/search?q=appid%3A730";
 var links = [];
 var totalPages = 0;
 var scrapeDirectory = "./csgo-pages/";
@@ -32,7 +32,8 @@ casper.getItemRows = function() {
     });
 };
 
-casper.parsePage = function() {
+casper.parsePage = function(page, results) {
+    fs.write(scrapeDirectory + page, results.outerHTML, "w");
 };
 
 casper.getCurrentPage = function() {
@@ -47,63 +48,27 @@ casper.getTotalPages = function() {
     });
 };
 
+// Start of program
+// Checks if directory exists and creates directory if it doesn't
 casper.start(url, function() {
     if(!fs.isDirectory(scrapeDirectory)) {
         fs.makeDirectory(scrapeDirectory);
     }
 });
 
-casper.waitFor(casper.pageReady, function then() { // Get total pages
-    totalPages = this.getTotalPages();
-    this.echo(totalPages + " pages to scrape.");
+// Get total pages
+casper.then(function() {
+    casper.waitFor(casper.pageReady, function() { 
+        totalPages = this.getTotalPages();
+        this.echo(totalPages + " pages to scrape.");
+    });
 });
 
+// Creates an array of all the links to be scraped
 casper.then(function() {
-    for(var i = 1; i <= totalPages; i++) {
+    for(var i = 1; i <= 5; i++) {
         links.push(url + "#p" + i);
     }
-    this.echo(links[0]);
-});
-
-/*
-casper.then(function() {
-    for (var page = 1; page <= 2; page++) {
-        this.echo(page);
-        var newUrl = url + "#p" + page;
-        this.thenOpen(newUrl, function() {
-            this.echo(page);
-            this.waitFor(function() { // Wait for webpage to finish all AJAX calls
-                var state = this.evaluate(function() {
-                    return document.readyState
-                });
-
-                return state == "complete"
-            }, function then() {
-                // Get current page to avoid scraping page
-                // if total page count is smaller than current page
-                var currentPage = this.evaluate(function() {
-                    return document.getElementsByClassName("market_paging_pagelink active")[0].textContent;
-                });
-
-                this.echo(page);
-
-                if(parseInt(currentPage) == page) {
-                    var results = this.evaluate(function() {
-                        return document.getElementById("searchResults");
-                    });
-
-                    this.echo(results.outerHTML);
-                } else {
-                    this.echo("FALSE");
-                }
-            });
-        });
-    };
-});
-*/
-
-casper.then(function() {
-    this.echo(links.length);
 });
 
 casper.run();
