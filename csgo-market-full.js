@@ -60,10 +60,7 @@ casper.start(url, function() {
         totalPages = this.getTotalPages();
         this.echo(totalPages + " pages to scrape.");
     });
-});
 
-// Creates an array of all the links to be scraped
-casper.then(function() {
     for(var i = 1; i <= 5; i++) {
         links.push(url + "#p" + i);
     }
