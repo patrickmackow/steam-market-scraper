@@ -56,14 +56,10 @@ casper.start(url, function() {
     }
 
     // Get total pages
-    casper.waitFor(casper.pageReady, function() { 
+    this.waitFor(casper.pageReady, function() { 
         totalPages = this.getTotalPages();
-        this.echo(totalPages + " pages to scrape.");
+        this.echo(totalPages);
     });
-
-    for(var i = 1; i <= 5; i++) {
-        links.push(url + "#p" + i);
-    }
 });
 
 casper.run();
