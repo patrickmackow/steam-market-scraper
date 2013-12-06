@@ -2,13 +2,11 @@
 
 // Global variables
 //var url = "http://steamcommunity.com/market/search?q=appid%3A730";
-var links = [];
-var totalPages = 0;
-var scrapeDirectory = "./csgo-pages/";
 
 // Casper settings
 var casper = require("casper").create({
-    verbose: true,
+    //verbose: true,
+    logLevel: "debug",
     pageSettings: {
         loadImages: false, // Load pages quicker
         userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0"
@@ -16,6 +14,7 @@ var casper = require("casper").create({
 });
 
 var url = casper.cli.get(0);
+var scrapeDirectory = casper.cli.get(1);
 
 // FileSystem module
 var fs = require("fs");
@@ -59,8 +58,21 @@ casper.start(url, function() {
 
     // Get total pages
     this.waitFor(casper.pageReady, function() { 
-        totalPages = this.getTotalPages();
-        this.echo(totalPages);
+        var page = 0;
+        if (url.indexOf("#p") !== -1) {
+            page = url.split("#p")[1];
+        } else {
+            // TODO: This is a listing pages
+        }
+
+        if (this.getCurrentPage() == page) {
+            this.parsePage(page, this.getItemRows());
+        } else {
+            // TODO: Add some kind of failure
+            this.log("Current page and url page do not match", "error");
+            this.log("Current page: " + this.getCurrentPage(), "error");
+            this.log("Url page: " + page, "error");
+        }
     });
 });
 

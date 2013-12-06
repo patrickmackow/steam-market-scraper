@@ -2,19 +2,16 @@
 
 // Global variables
 //var url = "http://steamcommunity.com/market/search?q=appid%3A730";
-var links = [];
-var totalPages = 0;
-var scrapeDirectory = "./csgo-pages/";
 
 // Casper settings
 var casper = require("casper").create({
-    verbose: true,
     pageSettings: {
         loadImages: false, // Load pages quicker
         userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0"
     }
 });
 
+// First arguement is url
 var url = casper.cli.get(0);
 
 // FileSystem module
@@ -26,22 +23,6 @@ casper.pageReady = function() {
     });
 
     return state == "complete";
-};
-
-casper.getItemRows = function() {
-    return this.evaluate(function() {
-        return document.getElementById("searchResults");
-    });
-};
-
-casper.parsePage = function(page, results) {
-    fs.write(scrapeDirectory + page, results.outerHTML, "w");
-};
-
-casper.getCurrentPage = function() {
-    return this.evaluate(function() {
-        return parseInt(document.getElementsByClassName("market_paging_pagelink active")[0].textContent);
-    });
 };
 
 casper.getTotalPages = function() {
