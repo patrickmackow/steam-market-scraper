@@ -52,6 +52,10 @@ casper.getTotalPages = function() {
 // Start of program
 // Checks if directory exists and creates directory if it doesn't
 casper.start(url, function() {
+    // Add '/' to the end of directory path so files get written to proper location
+    if(!scrapeDirectory.endsWith("/")) {
+        scrapeDirectory = scrapeDirectory + "/";
+    }
     if(!fs.isDirectory(scrapeDirectory)) {
         fs.makeDirectory(scrapeDirectory);
     }
