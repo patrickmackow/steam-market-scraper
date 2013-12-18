@@ -34,13 +34,9 @@ casper.getTotalPages = function() {
 // Start of program
 // Checks if directory exists and creates directory if it doesn't
 casper.start(url, function() {
-    if(!fs.isDirectory(scrapeDirectory)) {
-        fs.makeDirectory(scrapeDirectory);
-    }
-
     // Get total pages
     this.waitFor(casper.pageReady, function() { 
-        totalPages = this.getTotalPages();
+        var totalPages = this.getTotalPages();
         this.echo(totalPages);
     });
 });
