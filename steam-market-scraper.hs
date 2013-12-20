@@ -1,2 +1,4 @@
+import Paths_steam_market_scraper
+
 main :: IO()
-main = undefined
+main = getDataFileName "market-total.js" >>= print

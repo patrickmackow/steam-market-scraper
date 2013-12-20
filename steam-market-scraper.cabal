@@ -13,13 +13,14 @@ maintainer:          patrickmackow@gmail.com
 -- category:            
 build-type:          Simple
 -- extra-source-files:  
+-- Include casperjs files
 data-files:          market-total.js
                    , market-page.js
 cabal-version:       >=1.10
 
 executable steam-market-scraper
   main-is:             steam-market-scraper.hs
-  -- other-modules:       
+  other-modules:       Paths_steam_market_scraper
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.7
   -- hs-source-dirs:      
