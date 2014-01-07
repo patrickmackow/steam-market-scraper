@@ -5,10 +5,7 @@ import Paths_steam_market_scraper
 
 main :: IO()
 main = do
-    marketTotal <- getDataFileName "market-total.js" 
-    print $ (marketTotal ++ " 'http://steamcommunity.com/market/search?q=appid%3A730'")
-    handle <- runCommand $ ("casperjs " ++ marketTotal ++ " 'http://steamcommunity.com/market/search?q=appid%3A730'")
-    exitCode <- waitForProcess handle
-    print exitCode
-    handle2 <- runCommand $ ("casperjs market-total.js 'http://steamcommunity.com/market/search?q=appid%3A730'")
+    handle <- runCommand $ ("casperjs market-total.js 'http://steamcommunity.com/market/search?q=appid%3A730'")
+    waitForProcess handle >>= print
+    handle2 <- runCommand $ ("casperjs market-page.js 'http://steamcommunity.com/market/search?q=appid%3A730#p50' csgo-pages/")
     waitForProcess handle2 >>= print
