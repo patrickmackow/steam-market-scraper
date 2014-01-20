@@ -8,9 +8,12 @@ data ItemListing = undefined
 
 main :: IO()
 main = do
-    --handle <- runCommand $ ("casperjs market-total.js 'http://steamcommunity.com/market/search?q=appid%3A730'")
+    --handle <- runCommand $ ("casperjs market-total.js\
+    --\'http://steamcommunity.com/market/search?q=appid%3A730'")
     --waitForProcess handle >>= print
-    --handle2 <- runCommand $ ("casperjs market-page.js 'http://steamcommunity.com/market/search?q=appid%3A730#p50' csgo-pages/")
+    --handle2 <- runCommand $ ("casperjs market-page.js\
+    --\'http://steamcommunity.com/market/search?q=appid%3A730#p50'\
+    --\csgo-pages/")
     --waitForProcess handle2 >>= print
     
 scrapeMarketPage :: Text -> [MarketItem]

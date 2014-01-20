@@ -9,7 +9,8 @@ var casper = require("casper").create({
     logLevel: "debug",
     pageSettings: {
         loadImages: false, // Load pages quicker
-        userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0"
+        userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0)" +
+        + " Gecko/20100101 Firefox/25.0"
     }
 });
 
@@ -39,20 +40,25 @@ casper.parsePage = function(page, results) {
 
 casper.getCurrentPage = function() {
     return this.evaluate(function() {
-        return parseInt(document.getElementsByClassName("market_paging_pagelink active")[0].textContent);
+        return parseInt(document
+            .getElementsByClassName("market_paging_pagelink active")[0]
+            .textContent);
     });
 };
 
 casper.getTotalPages = function() {
     return this.evaluate(function() {
-        return parseInt(document.getElementById("searchResults_links").children[6].textContent);
+        return parseInt(document
+            .getElementById("searchResults_links")
+            .children[6].textContent);
     });
 };
 
 // Start of program
 // Checks if directory exists and creates directory if it doesn't
 casper.start(url, function() {
-    // Add '/' to the end of directory path so files get written to proper location
+    // Add '/' to the end of directory path 
+    // so files get written to proper location
     if(scrapeDirectory.lastIndexOf("/") !== (scrapeDirectory.length - 1)) {
         scrapeDirectory = scrapeDirectory + "/";
     }

@@ -7,7 +7,8 @@
 var casper = require("casper").create({
     pageSettings: {
         loadImages: false, // Load pages quicker
-        userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0"
+        userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0)"
+        + " Gecko/20100101 Firefox/25.0"
     }
 });
 
@@ -27,7 +28,8 @@ casper.pageReady = function() {
 
 casper.getTotalPages = function() {
     return this.evaluate(function() {
-        return parseInt(document.getElementById("searchResults_links").children[6].textContent);
+        return parseInt(document.getElementById("searchResults_links")
+            .children[6].textContent);
     });
 };
 
