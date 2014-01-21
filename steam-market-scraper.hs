@@ -10,7 +10,7 @@ data MarketItem = MarketItem { link :: String
                              , price :: String
                              , name :: String
                              , game :: String
-                             } deriving (Show)
+                             } deriving (Show, Eq)
 
 main :: IO()
 main = do
@@ -52,8 +52,13 @@ scrapeQuantity item = getTagText quantity
     where quantity = head . sections (~== "<span class=market_listing_num_listings_qty>") $ item
 
 scrapePrice :: [Tag String] -> String
-scrapePrice item = innerText price
-    where price = takeWhile (~/= "<div class=market_list_name_item_block>") $ dropWhile (~/= "<br>") item
+scrapePrice item = g . fromTagText . head $ priceText
+    where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
+          priceText = filter f $ filter isTagText priceTag
+          f :: Tag String -> Bool
+          f x = '$' `elem` fromTagText x
+          g :: String -> String
+          g x = takeWhile (/= ' ') $ dropWhile (/= '$') x
 
 scrapeName :: [Tag String] -> String
 scrapeName item = getTagText name
