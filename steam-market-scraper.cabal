@@ -25,5 +25,6 @@ executable steam-market-scraper
   build-depends:       base >=4.6 && <4.7
                      , tagsoup == 0.*
                      , process == 1.*
+                     , directory == 1.*
   -- hs-source-dirs:      
   default-language:    Haskell2010

@@ -1,6 +1,9 @@
 import Text.HTML.TagSoup
 import System.IO
 import System.Process
+import System.Directory
+import Data.Char
+import Data.List
 
 import Paths_steam_market_scraper
 
@@ -13,20 +16,44 @@ data MarketItem = MarketItem { link :: String
                              , game :: String
                              } deriving (Show, Eq)
 
-main :: IO()
+main :: IO ()
 main = do
-    -- handle <- runCommand $ ("casperjs market-total.js\
-    -- \'http://steamcommunity.com/market/search?q=appid%3A730'")
-    -- waitForProcess handle >>= print
-    -- handle2 <- runCommand $ ("casperjs market-page.js\
-    -- \'http://steamcommunity.com/market/search?q=appid%3A730#p50'\
-    -- \csgo-pages/")
-    -- waitForProcess handle2 >>= print
-    test <- readFile "csgo-pages/50"
-    let items = scrapeMarketPage test
-    print items
+    -- Download all market pages
+    -- total <- readProcess "casperjs" ["market-total.js"
+    --     ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    -- scrapeMarket $ read . head . lines $ total
+    files <- getDirectoryContents "csgo-pages/"
+    let pages = filter (all isDigit) files
+    print pages
+    items <- mapM (\x -> readMarketPage x) 
+        $ fmap (\x -> "csgo-pages/" ++ x) pages
     print $ length items
+    -- test <- readFile "csgo-pages/50"
+    -- let items = scrapeMarketPage test
+    -- print items
+    -- print $ length items
 
+-- Download all Steam Market pages
+scrapeMarket :: Int -> IO ()
+scrapeMarket 1 = do
+    handle <- runCommand $ ("casperjs market-page.js\
+    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
+        ++ (show 1) ++ "' csgo-pages/")
+    waitForProcess handle
+    return ()
+scrapeMarket x = do
+    handle <- runCommand $ ("casperjs market-page.js\
+    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
+        ++ (show x) ++ "' csgo-pages/")
+    waitForProcess handle
+    scrapeMarket (x - 1)
+
+readMarketPage :: FilePath -> IO [MarketItem]
+readMarketPage path = do
+    file <- readFile path
+    return $ scrapeMarketPage file
+
+-- Scrape info from market page
 scrapeMarketPage :: String -> [MarketItem]
 scrapeMarketPage page = fmap scrapeMarketItem items
     where items = sections (~== "<a class=market_listing_row_link>")
