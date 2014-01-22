@@ -27,7 +27,7 @@ main = do
     print pages
     items <- mapM (\x -> readMarketPage x) 
         $ fmap (\x -> "csgo-pages/" ++ x) pages
-    print $ length items
+    print $ length . concat $ items
     -- test <- readFile "csgo-pages/50"
     -- let items = scrapeMarketPage test
     -- print items
