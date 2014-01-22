@@ -9,6 +9,7 @@ data MarketItem = MarketItem { link :: String
                              , quantity :: String
                              , price :: String
                              , name :: String
+                             , nameColour :: String
                              , game :: String
                              } deriving (Show, Eq)
 
@@ -32,12 +33,14 @@ scrapeMarketPage page = fmap scrapeMarketItem items
                   $ parseTags page
 
 scrapeMarketItem :: [Tag String] -> MarketItem
-scrapeMarketItem item = MarketItem link image quantity price name game
+scrapeMarketItem item = 
+    MarketItem link image quantity price name nameColour game
     where link = scrapeLink item
           image = scrapeImage item
           quantity = scrapeQuantity item
           price = scrapePrice item
           name = scrapeName item
+          nameColour = scrapeNameColour item
           game = scrapeGame item
 
 scrapeLink :: [Tag String] -> String
@@ -49,24 +52,37 @@ scrapeImage item = getAttrib "src" image
 
 scrapeQuantity :: [Tag String] -> String
 scrapeQuantity item = getTagText quantity
-    where quantity = head . sections (~== "<span class=market_listing_num_listings_qty>") $ item
+    where quantity = head . sections (~== "<span\
+        \ class=market_listing_num_listings_qty>") $ item
 
 scrapePrice :: [Tag String] -> String
 scrapePrice item = g . fromTagText . head $ priceText
     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
           priceText = filter f $ filter isTagText priceTag
+          -- Find Tag which contains price
           f :: Tag String -> Bool
           f x = '$' `elem` fromTagText x
+          -- Get price only
           g :: String -> String
           g x = takeWhile (/= ' ') $ dropWhile (/= '$') x
 
 scrapeName :: [Tag String] -> String
 scrapeName item = getTagText name
-    where name = head . sections (~== "<span class=market_listing_item_name>") $ item
+    where name = head . sections (~== "<span\ 
+        \ class=market_listing_item_name>") $ item
+
+scrapeNameColour :: [Tag String] -> String
+scrapeNameColour item = f $ getAttrib "style" colour
+    where colour = head . sections (~== "<span\ 
+        \ class=market_listing_item_name>") $ item
+          -- Get CSS colour
+          f :: String -> String
+          f x = takeWhile (/= ';') $ dropWhile (/= '#') x
 
 scrapeGame :: [Tag String] -> String
 scrapeGame item = getTagText game
-    where game = head . sections (~== "<span class=market_listing_game_name>") $ item
+    where game = head . sections (~== "<span\ 
+        \ class=market_listing_game_name>") $ item
 
 -- Util functions
 getAttrib :: String -> [Tag String] -> String
