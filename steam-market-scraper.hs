@@ -7,7 +7,7 @@ import Data.List
 
 import Paths_steam_market_scraper
 
-data MarketItem = MarketItem { link :: String
+data MarketItem = MarketItem { url :: String
                              , image :: String
                              , quantity :: String
                              , price :: String
@@ -61,8 +61,8 @@ scrapeMarketPage page = fmap scrapeMarketItem items
 
 scrapeMarketItem :: [Tag String] -> MarketItem
 scrapeMarketItem item = 
-    MarketItem link image quantity price name nameColour game
-    where link = scrapeLink item
+    MarketItem url image quantity price name nameColour game
+    where url = scrapeUrl item
           image = scrapeImage item
           quantity = scrapeQuantity item
           price = scrapePrice item
@@ -70,8 +70,8 @@ scrapeMarketItem item =
           nameColour = scrapeNameColour item
           game = scrapeGame item
 
-scrapeLink :: [Tag String] -> String
-scrapeLink item = getAttrib "href" item
+scrapeUrl :: [Tag String] -> String
+scrapeUrl item = getAttrib "href" item
 
 scrapeImage :: [Tag String] -> String
 scrapeImage item = getAttrib "src" image
