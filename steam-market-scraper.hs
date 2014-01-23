@@ -78,7 +78,7 @@ scrapeImage item = getAttrib "src" image
     where image = head . sections (~== "<img>") $ item
 
 scrapeQuantity :: [Tag String] -> String
-scrapeQuantity item = getTagText quantity
+scrapeQuantity item = filter (/= ',') $ getTagText quantity
     where quantity = head . sections (~== "<span\
         \ class=market_listing_num_listings_qty>") $ item
 
