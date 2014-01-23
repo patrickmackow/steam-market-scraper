@@ -91,7 +91,7 @@ scrapePrice item = g . fromTagText . head $ priceText
           f x = '$' `elem` fromTagText x
           -- Get price only
           g :: String -> String
-          g x = takeWhile (/= ' ') $ dropWhile (/= '$') x
+          g x = drop 1 . takeWhile (/= ' ') $ dropWhile (/= '$') x
 
 scrapeName :: [Tag String] -> String
 scrapeName item = getTagText name
