@@ -37,9 +37,10 @@ instance FromRow MarketItem where
 main :: IO ()
 main = do
     -- Download all market pages
-    -- total <- readProcess "casperjs" ["market-total.js"
-    --     ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
-    -- scrapeMarket $ read . head . lines $ total
+    total <- readProcess "casperjs" ["market-total.js"
+        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    scrapeMarket $ read . head . lines $ total
+
     files <- getDirectoryContents "csgo-pages/"
     let pages = filter (all isDigit) files
     items <- mapM (\x -> readMarketPage x) 
@@ -75,6 +76,7 @@ scrapeMarket x = do
 readMarketPage :: FilePath -> IO [MarketItem]
 readMarketPage path = do
     file <- readFile path
+    removeFile path
     return $ scrapeMarketPage file
 
 storeItems :: Connection -> [MarketItem] -> IO ()
