@@ -7,9 +7,12 @@ import Data.List
 import Database.PostgreSQL.Simple
 import Database.PostgreSQL.Simple.ToField
 import Database.PostgreSQL.Simple.ToRow
+import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.Types
 import Data.Int
 import qualified Data.ByteString.Char8 as B
+import Control.Applicative
+import Control.Monad
 
 import Paths_steam_market_scraper
 
@@ -27,6 +30,10 @@ instance ToRow MarketItem where
         toField (price m), toField (name m), toField (nameColour m), 
         toField (game m)]
 
+instance FromRow MarketItem where
+    fromRow = MarketItem <$> field <*> field <*> field 
+        <*> field <*> field <*> field <*> field
+
 main :: IO ()
 main = do
     -- Download all market pages
@@ -41,8 +48,9 @@ main = do
     conn <- connect defaultConnectInfo { connectUser = "patrick"
                                        , connectPassword = ""
                                        , connectDatabase = "steam_market" }
-    count <- insertItems conn (nub $ concat items)
-    print count
+    storeItems conn $ nub $ concat items
+    -- count <- insertItems conn (nub $ concat items)
+    -- print count
     close conn
     -- test <- readFile "csgo-pages/50"
     -- let items = scrapeMarketPage test
@@ -69,11 +77,32 @@ readMarketPage path = do
     file <- readFile path
     return $ scrapeMarketPage file
 
-insertItems :: ToRow q => Connection -> [q] -> IO Int64
-insertItems conn items = executeMany conn insert items
+storeItems :: Connection -> [MarketItem] -> IO ()
+storeItems conn items = do
+    let select = Query $ B.pack "SELECT url FROM market"
+    existing <- query_ conn select
+    let existingStrings = fmap (\(Only url) -> B.unpack url) existing
+    -- forM_ existing $ \(Only url) -> print $ B.unpack url
+    print $ length existing
+    forM_ items $ \item -> checkItem conn existingStrings item
+    return ()
+
+checkItem :: Connection -> [String] -> MarketItem -> IO Int64
+checkItem conn existing item
+    | length existing == 0 = insertItem conn item
+    | (url item) `elem` existing = updateItem conn [quantity item, price item, url item]
+    | otherwise = insertItem conn item
+
+insertItem :: Connection -> MarketItem -> IO Int64
+insertItem conn item = execute conn insert item
     where insert = Query $ B.pack "INSERT INTO market (url, image, \
-                   \quantity, price, item_name, item_name_colour, game) \
-                   \VALUES (?,?,?,?,?,?,?)"
+             \quantity, price, item_name, item_name_colour, game) \
+             \VALUES (?,?,?,?,?,?,?)"
+
+updateItem :: Connection -> [String] -> IO Int64
+updateItem conn item = execute conn update item
+    where update = Query $ B.pack "UPDATE market SET quantity = ?, \
+             \price = ? WHERE url = ?"
 
 -- Scrape info from market page
 scrapeMarketPage :: String -> [MarketItem]
