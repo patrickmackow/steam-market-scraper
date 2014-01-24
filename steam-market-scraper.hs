@@ -4,6 +4,12 @@ import System.Process
 import System.Directory
 import Data.Char
 import Data.List
+import Database.PostgreSQL.Simple
+import Database.PostgreSQL.Simple.ToField
+import Database.PostgreSQL.Simple.ToRow
+import Database.PostgreSQL.Simple.Types
+import Data.Int
+import qualified Data.ByteString.Char8 as B
 
 import Paths_steam_market_scraper
 
@@ -16,6 +22,11 @@ data MarketItem = MarketItem { url :: String
                              , game :: String
                              } deriving (Show, Eq)
 
+instance ToRow MarketItem where
+    toRow m = [toField (url m), toField (image m), toField (quantity m), 
+        toField (price m), toField (name m), toField (nameColour m), 
+        toField (game m)]
+
 main :: IO ()
 main = do
     -- Download all market pages
@@ -24,10 +35,15 @@ main = do
     -- scrapeMarket $ read . head . lines $ total
     files <- getDirectoryContents "csgo-pages/"
     let pages = filter (all isDigit) files
-    print pages
     items <- mapM (\x -> readMarketPage x) 
         $ fmap (\x -> "csgo-pages/" ++ x) pages
-    print $ length . concat $ items
+
+    conn <- connect defaultConnectInfo { connectUser = "patrick"
+                                       , connectPassword = ""
+                                       , connectDatabase = "steam_market" }
+    count <- insertItems conn (nub $ concat items)
+    print count
+    close conn
     -- test <- readFile "csgo-pages/50"
     -- let items = scrapeMarketPage test
     -- print items
@@ -52,6 +68,12 @@ readMarketPage :: FilePath -> IO [MarketItem]
 readMarketPage path = do
     file <- readFile path
     return $ scrapeMarketPage file
+
+insertItems :: ToRow q => Connection -> [q] -> IO Int64
+insertItems conn items = executeMany conn insert items
+    where insert = Query $ B.pack "INSERT INTO market (url, image, \
+                   \quantity, price, item_name, item_name_colour, game) \
+                   \VALUES (?,?,?,?,?,?,?)"
 
 -- Scrape info from market page
 scrapeMarketPage :: String -> [MarketItem]
