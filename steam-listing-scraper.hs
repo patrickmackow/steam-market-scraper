@@ -25,6 +25,12 @@ data MarketItem = MarketItem { url :: String
                              , game :: String
                              } deriving (Show, Eq)
 
+data ItemListing = ItemListing { listingNo :: String
+                               , url :: String
+                               , price :: String
+                               , priceBeforeFee :: String
+                               } deriving (Show, Eq)
+
 instance ToRow MarketItem where
     toRow m = [toField (url m), toField (image m), toField (quantity m), 
         toField (price m), toField (name m), toField (nameColour m), 
@@ -33,6 +39,13 @@ instance ToRow MarketItem where
 instance FromRow MarketItem where
     fromRow = MarketItem <$> field <*> field <*> field 
         <*> field <*> field <*> field <*> field
+
+instance ToRow ItemListing where
+    toRow i = [toField (listingNo i), toField (url i), toField (price i),
+        toField (priceBeforeFee i)]
+
+instance FromRow ItemListing where
+    fromRow = ItemListing <$> field <*> field <*> field <*> field
 
 main :: IO ()
 main = do
