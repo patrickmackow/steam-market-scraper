@@ -28,9 +28,15 @@ casper.pageReady = function() {
     return state == "complete";
 };
 
-casper.getItemRows = function() {
+casper.getMarketRows = function() {
     return this.evaluate(function() {
         return document.getElementById("searchResults");
+    });
+};
+
+casper.getListingRows = function() {
+    return this.evaluate(function() {
+        return document.getElementById("searchResultsRows");
     });
 };
 
@@ -68,20 +74,27 @@ casper.start(url, function() {
 
     // Get total pages
     this.waitFor(casper.pageReady, function() { 
-        var page = 0;
-        if (url.indexOf("#p") !== -1) {
-            page = url.split("#p")[1];
-        } else {
-            // TODO: This is a listing pages
+        // Check if page if listing or market
+        if (url.indexOf("/listing/" !== -1)) {
+            var filename = url.split("/listings/")[1].split("/")[1];
+            this.parsePage(filename, this.getListingRows());
         }
+        else {
+            var page = 0;
+            if (url.indexOf("#p") !== -1) {
+                page = url.split("#p")[1];
+            } else {
+                // TODO: This is a listing pages
+            }
 
-        if (this.getCurrentPage() == page) {
-            this.parsePage(page, this.getItemRows());
-        } else {
-            // TODO: Add some kind of failure
-            this.log("Current page and url page do not match", "error");
-            this.log("Current page: " + this.getCurrentPage(), "error");
-            this.log("Url page: " + page, "error");
+            if (this.getCurrentPage() == page) {
+                this.parsePage(page, this.getMarketRows());
+            } else {
+                // TODO: Add some kind of failure
+                this.log("Current page and url page do not match", "error");
+                this.log("Current page: " + this.getCurrentPage(), "error");
+                this.log("Url page: " + page, "error");
+            }
         }
     });
 });
