@@ -16,14 +16,15 @@ import Control.Monad
 
 import Paths_steam_market_scraper
 
-data MarketItem = MarketItem { url :: String
-                             , image :: String
-                             , quantity :: String
-                             , price :: String
-                             , name :: String
-                             , nameColour :: String
-                             , game :: String
-                             } deriving (Show, Eq)
+data MarketItem = MarketItem 
+    { url :: String
+    , image :: String
+    , quantity :: String
+    , price :: String
+    , name :: String
+    , nameColour :: String
+    , game :: String
+    } deriving (Show, Eq)
 
 instance ToRow MarketItem where
     toRow m = [toField (url m), toField (image m), toField (quantity m), 
