@@ -11,25 +11,37 @@ import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.Types
 import Data.Int
 import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
 import Control.Applicative
 import Control.Monad
+import Data.Aeson
 
-import Paths_steam_listing_scraper
+import Paths_steam_market_scraper
 
-data MarketItem = MarketItem { url :: String
-                             , image :: String
-                             , quantity :: String
-                             , price :: String
-                             , name :: String
-                             , nameColour :: String
-                             , game :: String
-                             } deriving (Show, Eq)
+currencies = [ ("RUB", "pуб")
+             , ("GBP", "£")
+             , ("BRL", "R$")
+             , ("EUR", "€")]
 
-data ItemListing = ItemListing { listingNo :: String
-                               , url :: String
-                               , price :: String
-                               , priceBeforeFee :: String
-                               } deriving (Show, Eq)
+data CurrencyRate = CurrencyRate
+    { currency :: String
+    , rate :: Double
+    } deriving (Show)
+
+instance FromJSON CurrencyRate where
+    parseJSON (Object v) = CurrencyRate <$>
+                           v .: T.pack "currency" <*>
+                           v .: T.pack "rate"
+
+data MarketItem = MarketItem 
+    { url :: String
+    , image :: String
+    , quantity :: String
+    , price :: String
+    , name :: String
+    , nameColour :: String
+    , game :: String
+    } deriving (Show, Eq)
 
 instance ToRow MarketItem where
     toRow m = [toField (url m), toField (image m), toField (quantity m), 
@@ -40,51 +52,55 @@ instance FromRow MarketItem where
     fromRow = MarketItem <$> field <*> field <*> field 
         <*> field <*> field <*> field <*> field
 
+data ItemListing = ItemListing 
+    { listingNo :: String
+    , itemUrl :: String
+    , itemPrice :: String
+    , priceBeforeFee :: String
+    } deriving (Show, Eq)
+
 instance ToRow ItemListing where
-    toRow i = [toField (listingNo i), toField (url i), toField (price i),
-        toField (priceBeforeFee i)]
+    toRow i = [toField (listingNo i), toField (itemUrl i), 
+        toField (itemPrice i), toField (priceBeforeFee i)]
 
 instance FromRow ItemListing where
     fromRow = ItemListing <$> field <*> field <*> field <*> field
 
 main :: IO ()
 main = do
-    -- Download all market pages
-    total <- readProcess "casperjs" ["market-total.js"
-        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
-    scrapeMarket $ read . head . lines $ total
-
-    files <- getDirectoryContents "csgo-pages/"
-    let pages = filter (all isDigit) files
-    items <- mapM (\x -> readMarketPage x) 
-        $ fmap (\x -> "csgo-pages/" ++ x) pages
-
+    -- PostgreSQL database connection
     conn <- connect defaultConnectInfo { connectUser = "patrick"
                                        , connectPassword = ""
                                        , connectDatabase = "steam_market" }
-    storeItems conn $ nub $ concat items
-    -- count <- insertItems conn (nub $ concat items)
-    -- print count
+    -- Download all listings
+    urlsToScrape <- getUrlsToScrape conn
+    -- scrapeListings urlsToScrape
+
+    files <- getDirectoryContents "csgo-listings/"
+    let filteredFiles = filter (isSuffixOf ".html") files
+
+    -- Close database connection
     close conn
-    -- test <- readFile "csgo-pages/50"
-    -- let items = scrapeMarketPage test
-    -- print items
-    -- print $ length items
+
+getUrlsToScrape :: Connection -> IO [String]
+getUrlsToScrape conn = do
+    let select = Query $ B.pack "SELECT url FROM market"
+    urls <- query_ conn select
+    let urlStrings = fmap (\(Only url) -> B.unpack url) urls
+    return urlStrings
 
 -- Download all Steam Market pages
-scrapeListings :: Int -> IO ()
-scrapeListings 1 = do
+scrapeListings :: [String] -> IO ()
+scrapeListings (url:[]) = do
     handle <- runCommand $ ("casperjs market-page.js\
-    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show 1) ++ "' csgo-pages/")
+        \ '" ++ url ++ "' csgo-listings/")
     waitForProcess handle
     return ()
-scrapeListings x = do
+scrapeListings (url:urls) = do
     handle <- runCommand $ ("casperjs market-page.js\
-    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show x) ++ "' csgo-pages/")
+        \ '" ++ url ++ "' csgo-listings/")
     waitForProcess handle
-    scrapeMarket (x - 1)
+    scrapeListings urls
 
 readListingsPage :: FilePath -> IO [ItemListing]
 readListingsPage path = do
@@ -93,20 +109,22 @@ readListingsPage path = do
     return $ scrapeListingsPage file
 
 storeListings :: Connection -> [MarketItem] -> IO ()
-storeListings conn items = do
-    let select = Query $ B.pack "SELECT url FROM market"
-    existing <- query_ conn select
-    let existingStrings = fmap (\(Only url) -> B.unpack url) existing
-    -- forM_ existing $ \(Only url) -> print $ B.unpack url
-    print $ length existing
-    forM_ items $ \item -> checkItem conn existingStrings item
-    return ()
+storeListings = undefined
+-- storeListings conn items = do
+--     let select = Query $ B.pack "SELECT url FROM market"
+--     existing <- query_ conn select
+--     let existingStrings = fmap (\(Only url) -> B.unpack url) existing
+--     -- forM_ existing $ \(Only url) -> print $ B.unpack url
+--     print $ length existing
+--     forM_ items $ \item -> checkItem conn existingStrings item
+--     return ()
 
 insertListings :: Connection -> MarketItem -> IO Int64
-insertListings conn item = execute conn insert item
-    where insert = Query $ B.pack "INSERT INTO market (url, image, \
-             \quantity, price, item_name, item_name_colour, game) \
-             \VALUES (?,?,?,?,?,?,?)"
+insertListings = undefined
+-- insertListings conn item = execute conn insert item
+--     where insert = Query $ B.pack "INSERT INTO market (url, image, \
+--              \quantity, price, item_name, item_name_colour, game) \
+--              \VALUES (?,?,?,?,?,?,?)"
 
 -- Scrape info from market page
 scrapeListingsPage :: String -> [ItemListing]
@@ -115,38 +133,33 @@ scrapeListingsPage page = fmap scrapeItemListing listings
                   $ parseTags page
 
 scrapeItemListing :: [Tag String] -> ItemListing
-scrapeItemListing listing = 
-    MarketItem url image quantity price name nameColour game
-    where url = scrapeUrl item
-          image = scrapeImage item
-          quantity = scrapeQuantity item
-          price = scrapePrice item
-          name = scrapeName item
-          nameColour = scrapeNameColour item
-          game = scrapeGame item
+scrapeItemListing = undefined
+-- scrapeItemListing listing = 
+--     MarketItem url image quantity price name nameColour game
+--     where url = scrapeUrl item
+--           image = scrapeImage item
+--           quantity = scrapeQuantity item
+--           price = scrapePrice item
+--           name = scrapeName item
+--           nameColour = scrapeNameColour item
+--           game = scrapeGame item
 
 scrapeUrl :: [Tag String] -> String
-scrapeUrl item = getAttrib "href" item
+scrapeUrl = undefined
+-- scrapeUrl item = getAttrib "href" item
 
-scrapeImage :: [Tag String] -> String
-scrapeImage item = getAttrib "src" image
-    where image = head . sections (~== "<img>") $ item
-
-scrapeQuantity :: [Tag String] -> String
-scrapeQuantity item = filter (/= ',') $ getTagText quantity
-    where quantity = head . sections (~== "<span\
-        \ class=market_listing_num_listings_qty>") $ item
-
+-- Edge cases: "Sold!"
 scrapePrice :: [Tag String] -> String
-scrapePrice item = g . fromTagText . head $ priceText
-    where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
-          priceText = filter f $ filter isTagText priceTag
-          -- Find Tag which contains price
-          f :: Tag String -> Bool
-          f x = '$' `elem` fromTagText x
-          -- Get price only
-          g :: String -> String
-          g x = drop 1 . takeWhile (/= ' ') $ dropWhile (/= '$') x
+scrapePrice = undefined
+-- scrapePrice item = g . fromTagText . head $ priceText
+--     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
+--           priceText = filter f $ filter isTagText priceTag
+--           -- Find Tag which contains price
+--           f :: Tag String -> Bool
+--           f x = '$' `elem` fromTagText x
+--           -- Get price only
+--           g :: String -> String
+--           g x = drop 1 . takeWhile (/= ' ') $ dropWhile (/= '$') x
 
 -- Util functions
 getAttrib :: String -> [Tag String] -> String

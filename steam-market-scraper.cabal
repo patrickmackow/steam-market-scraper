@@ -31,6 +31,22 @@ executable steam-market-scraper
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
+
+executable steam-listing-scraper
+  main-is:             steam-listing-scraper.hs
+  other-modules:       Paths_steam_market_scraper
+  -- other-extensions:    
+  build-depends:       base >=4.6 && <4.7
+                     , tagsoup == 0.*
+                     , process == 1.*
+                     , directory == 1.*
+                     , postgresql-simple == 0.*
+                     , bytestring == 0.*
+                     , aeson == 0.*
+                     , text == 1.*
+  -- hs-source-dirs:      
+  default-language:    Haskell2010
+
 executable currency-rates
   main-is:             currency-rates.hs
   build-depends:       base >=4.6 && <4.7
