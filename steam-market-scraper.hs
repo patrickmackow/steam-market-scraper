@@ -38,22 +38,23 @@ instance FromRow MarketItem where
 main :: IO ()
 main = do
     -- Download all market pages
-    total <- readProcess "casperjs" ["market-total.js"
-        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
-    scrapeMarket $ read . head . lines $ total
+    -- total <- readProcess "casperjs" ["market-total.js"
+    --     ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    -- scrapeMarket $ read . head . lines $ total
 
     files <- getDirectoryContents "csgo-pages/"
-    let pages = filter (all isDigit) files
-    items <- mapM (\x -> readMarketPage x) 
-        $ fmap (\x -> "csgo-pages/" ++ x) pages
+    let pages = filter (isSuffixOf ".html") files
+    print pages
+    -- items <- mapM (\x -> readMarketPage x) 
+    --     $ fmap (\x -> "csgo-pages/" ++ x) pages
 
-    conn <- connect defaultConnectInfo { connectUser = "patrick"
-                                       , connectPassword = ""
-                                       , connectDatabase = "steam_market" }
-    storeItems conn $ nub $ concat items
+    -- conn <- connect defaultConnectInfo { connectUser = "patrick"
+    --                                    , connectPassword = ""
+    --                                    , connectDatabase = "steam_market" }
+    -- storeItems conn $ nub $ concat items
     -- count <- insertItems conn (nub $ concat items)
     -- print count
-    close conn
+    -- close conn
     -- test <- readFile "csgo-pages/50"
     -- let items = scrapeMarketPage test
     -- print items

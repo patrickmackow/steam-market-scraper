@@ -41,7 +41,7 @@ casper.getListingRows = function() {
 };
 
 casper.parsePage = function(page, results) {
-    fs.write(scrapeDirectory + page, results.outerHTML, "w");
+    fs.write(scrapeDirectory + page + ".html", results.outerHTML, "w");
 };
 
 casper.getCurrentPage = function() {
@@ -75,11 +75,10 @@ casper.start(url, function() {
     // Get total pages
     this.waitFor(casper.pageReady, function() { 
         // Check if page if listing or market
-        if (url.indexOf("/listing/" !== -1)) {
+        if (url.indexOf("/listing/") !== -1) {
             var filename = url.split("/listings/")[1].split("/")[1];
             this.parsePage(filename, this.getListingRows());
-        }
-        else {
+        } else {
             var page = 0;
             if (url.indexOf("#p") !== -1) {
                 page = url.split("#p")[1];
