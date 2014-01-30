@@ -75,7 +75,7 @@ casper.start(url, function() {
     // Get total pages
     this.waitFor(casper.pageReady, function() { 
         // Check if page if listing or market
-        if (url.indexOf("/listing/") !== -1) {
+        if (url.indexOf("/listings/") !== -1) {
             var filename = url.split("/listings/")[1].split("/")[1];
             this.parsePage(filename, this.getListingRows());
         } else {
