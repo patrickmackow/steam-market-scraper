@@ -18,10 +18,10 @@ import Data.Aeson
 
 import Paths_steam_market_scraper
 
-currencies = [ ("RUB", "pуб")
-             , ("GBP", "£")
+currencies = [ ("RUB", "p\1091\1073.")
+             , ("GBP", "\163\&")
              , ("BRL", "R$")
-             , ("EUR", "€")]
+             , ("EUR", "\8364")]
 
 data CurrencyRate = CurrencyRate
     { currency :: String
@@ -70,14 +70,22 @@ main :: IO ()
 main = do
     -- PostgreSQL database connection
     conn <- connect defaultConnectInfo { connectUser = "patrick"
-                                       , connectPassword = ""
+                                       , connectPassword = "gecko787"
                                        , connectDatabase = "steam_market" }
     -- Download all listings
     urlsToScrape <- getUrlsToScrape conn
+    print $ length urlsToScrape
     -- scrapeListings urlsToScrape
 
     files <- getDirectoryContents "csgo-listings/"
     let filteredFiles = filter (isSuffixOf ".html") files
+
+    print filteredFiles
+
+    listings <- mapM (\x -> readListingsPage x)
+        $ fmap (\x -> "csgo-listings/" ++ x) filteredFiles
+
+    print listings
 
     -- Close database connection
     close conn
@@ -129,28 +137,33 @@ insertListings = undefined
 -- Scrape info from market page
 scrapeListingsPage :: String -> [ItemListing]
 scrapeListingsPage page = fmap scrapeItemListing listings
-    where listings = sections (~== "<div class=market_listing_row>")
-                  $ parseTags page
+    where listings = sections (~== TagOpen "div" [("id",""), ("class","")])
+                        $ parseTags page
 
 scrapeItemListing :: [Tag String] -> ItemListing
-scrapeItemListing = undefined
--- scrapeItemListing listing = 
---     MarketItem url image quantity price name nameColour game
---     where url = scrapeUrl item
---           image = scrapeImage item
---           quantity = scrapeQuantity item
---           price = scrapePrice item
---           name = scrapeName item
---           nameColour = scrapeNameColour item
---           game = scrapeGame item
+scrapeItemListing listing = ItemListing listingNo itemUrl (fst price) (snd price)
+    where listingNo = "test"
+          itemUrl = "test"
+          price = scrapePrice listing
 
 scrapeUrl :: [Tag String] -> String
 scrapeUrl = undefined
 -- scrapeUrl item = getAttrib "href" item
 
 -- Edge cases: "Sold!"
-scrapePrice :: [Tag String] -> String
-scrapePrice = undefined
+scrapePrice :: [Tag String] -> (String, String)
+scrapePrice listing = (trim $ getTagText price, trim $ getTagText priceBeforeFee)
+    where price = head . sections (~== "<span class='market_listing_price market_\
+                    \listing_price_with_fee'>")
+                    $ listing
+          priceBeforeFee  = head . sections (~== "<span class='market_listing_price market_\
+                                \listing_price_without_fee'>")
+                                $ listing
+          trim [] = []
+          trim (' ':xs) = trim xs
+          trim ('\n':xs) = trim xs
+          trim ('\t':xs) = trim xs
+          trim (x:xs) = x : trim xs
 -- scrapePrice item = g . fromTagText . head $ priceText
 --     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
 --           priceText = filter f $ filter isTagText priceTag

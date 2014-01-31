@@ -42,7 +42,7 @@ main = do
     --     ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
     -- scrapeMarket $ read . head . lines $ total
 
-    files <- getDirectoryContents "csgo-pages/"
+    -- files <- getDirectoryContents "csgo-pages/"
     let pages = filter (isSuffixOf ".html") files
     print pages
     -- items <- mapM (\x -> readMarketPage x) 
