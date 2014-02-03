@@ -44,6 +44,7 @@ executable steam-listing-scraper
                      , bytestring == 0.*
                      , aeson == 0.*
                      , text == 1.*
+                     , containers == 0.*
   -- hs-source-dirs:      
   default-language:    Haskell2010
 

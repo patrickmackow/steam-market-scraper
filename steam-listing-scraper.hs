@@ -11,10 +11,12 @@ import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.Types
 import Data.Int
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as B.L
 import qualified Data.Text as T
 import Control.Applicative
 import Control.Monad
 import Data.Aeson
+import qualified Data.Map as Map
 
 import Paths_steam_market_scraper
 
@@ -22,6 +24,7 @@ currencies = [ ("RUB", "p\1091\1073.")
              , ("GBP", "\163\&")
              , ("BRL", "R$")
              , ("EUR", "\8364")]
+currencyMap = Map.fromList currencies
 
 data CurrencyRate = CurrencyRate
     { currency :: String
@@ -68,6 +71,10 @@ instance FromRow ItemListing where
 
 main :: IO ()
 main = do
+    -- Read currency rates
+    ratesFile <- B.L.readFile "rates.json"
+    let rates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
+    print rates
     -- PostgreSQL database connection
     conn <- connect defaultConnectInfo { connectUser = "patrick"
                                        , connectPassword = "gecko787"
@@ -159,11 +166,6 @@ scrapePrice listing = (trim $ getTagText price, trim $ getTagText priceBeforeFee
           priceBeforeFee  = head . sections (~== "<span class='market_listing_price market_\
                                 \listing_price_without_fee'>")
                                 $ listing
-          trim [] = []
-          trim (' ':xs) = trim xs
-          trim ('\n':xs) = trim xs
-          trim ('\t':xs) = trim xs
-          trim (x:xs) = x : trim xs
 -- scrapePrice item = g . fromTagText . head $ priceText
 --     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
 --           priceText = filter f $ filter isTagText priceTag
@@ -180,3 +182,19 @@ getAttrib atr tag = fromAttrib atr . head . filter isTagOpen $ tag
 
 getTagText :: [Tag String] -> String
 getTagText = fromTagText . head . filter isTagText
+
+trim :: String -> String
+trim [] = []
+trim (' ':xs) = trim xs
+trim (',':xs) = '.' : trim xs
+trim ('\n':xs) = trim xs
+trim ('\t':xs) = trim xs
+trim (x:xs) = x : trim xs
+
+convert :: String -> String
+convert price
+    | liftM (`isInfixOf` price) Map.lookup "RUB" currencyMap = undefined
+    | "\163\&" `isInfixOf` price = undefined
+    | "R$" `isInfixOf` price = undefined
+    | "\8364" `isInfixOf` price = undefined
+    | otherwise = filter (\x -> isDigit x || '.' == x) price
