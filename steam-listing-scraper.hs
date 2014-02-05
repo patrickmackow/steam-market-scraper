@@ -17,6 +17,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Aeson
 import qualified Data.Map as Map
+import Text.Printf
 
 import Paths_steam_market_scraper
 
@@ -73,15 +74,19 @@ main :: IO ()
 main = do
     -- Read currency rates
     ratesFile <- B.L.readFile "rates.json"
-    let rates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
+    let maybeRates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
+    print maybeRates
+    
+    let rates = fmap (\(Just x) -> x)  maybeRates
     print rates
+
     -- PostgreSQL database connection
-    conn <- connect defaultConnectInfo { connectUser = "patrick"
-                                       , connectPassword = "gecko787"
-                                       , connectDatabase = "steam_market" }
+    -- conn <- connect defaultConnectInfo { connectUser = "patrick"
+    --                                    , connectPassword = "gecko787"
+    --                                    , connectDatabase = "steam_market" }
     -- Download all listings
-    urlsToScrape <- getUrlsToScrape conn
-    print $ length urlsToScrape
+    -- urlsToScrape <- getUrlsToScrape conn
+    -- print $ length urlsToScrape
     -- scrapeListings urlsToScrape
 
     files <- getDirectoryContents "csgo-listings/"
@@ -89,13 +94,13 @@ main = do
 
     print filteredFiles
 
-    listings <- mapM (\x -> readListingsPage x)
+    listings <- mapM (\x -> readListingsPage rates x)
         $ fmap (\x -> "csgo-listings/" ++ x) filteredFiles
 
     print listings
 
     -- Close database connection
-    close conn
+    -- close conn
 
 getUrlsToScrape :: Connection -> IO [String]
 getUrlsToScrape conn = do
@@ -117,11 +122,11 @@ scrapeListings (url:urls) = do
     waitForProcess handle
     scrapeListings urls
 
-readListingsPage :: FilePath -> IO [ItemListing]
-readListingsPage path = do
+readListingsPage :: [CurrencyRate] -> FilePath -> IO [ItemListing]
+readListingsPage rates path = do
     file <- readFile path
     -- removeFile path
-    return $ scrapeListingsPage file
+    return $ scrapeListingsPage rates file
 
 storeListings :: Connection -> [MarketItem] -> IO ()
 storeListings = undefined
@@ -142,24 +147,25 @@ insertListings = undefined
 --              \VALUES (?,?,?,?,?,?,?)"
 
 -- Scrape info from market page
-scrapeListingsPage :: String -> [ItemListing]
-scrapeListingsPage page = fmap scrapeItemListing listings
+scrapeListingsPage :: [CurrencyRate] -> String -> [ItemListing]
+scrapeListingsPage rates page = fmap (scrapeItemListing rates) listings
     where listings = sections (~== TagOpen "div" [("id",""), ("class","")])
                         $ parseTags page
 
-scrapeItemListing :: [Tag String] -> ItemListing
-scrapeItemListing listing = ItemListing listingNo itemUrl (fst price) (snd price)
+scrapeItemListing :: [CurrencyRate] -> [Tag String] -> ItemListing
+scrapeItemListing rates listing = ItemListing listingNo itemUrl (fst price) (snd price)
     where listingNo = "test"
           itemUrl = "test"
-          price = scrapePrice listing
+          price = scrapePrice rates listing
 
 scrapeUrl :: [Tag String] -> String
 scrapeUrl = undefined
 -- scrapeUrl item = getAttrib "href" item
 
 -- Edge cases: "Sold!"
-scrapePrice :: [Tag String] -> (String, String)
-scrapePrice listing = (trim $ getTagText price, trim $ getTagText priceBeforeFee)
+scrapePrice :: [CurrencyRate] -> [Tag String] -> (String, String)
+scrapePrice rates listing = (convert rates . trim $ getTagText price, 
+    convert rates . trim $ getTagText priceBeforeFee)
     where price = head . sections (~== "<span class='market_listing_price market_\
                     \listing_price_with_fee'>")
                     $ listing
@@ -193,19 +199,33 @@ trim (x:xs) = x : trim xs
 
 -- Convert the original listing currency to USD
 -- Returns "-1" if Sold! or unknown currency
-convert :: String -> String
-convert price
-    | rub `isInfixOf` price = undefined
-    | gbp `isInfixOf` price = undefined
-    | brl `isInfixOf` price = undefined
-    | eur `isInfixOf` price = undefined
-    | "USD" `isInfixOf` price= filter (\x -> isDigit x || '.' == x) price
+convert :: [CurrencyRate] -> String -> String
+convert rates price
+    | rub `isInfixOf` price = exchange rates "RUB" $ removeCurrency price rub
+    | gbp `isInfixOf` price = exchange rates "GBP" $ removeCurrency price gbp
+    | brl `isInfixOf` price = exchange rates "BRL" $ removeCurrency price brl
+    | eur `isInfixOf` price = exchange rates "EUR" $ removeCurrency price eur
+    | "USD" `isInfixOf` price = filter (\x -> isDigit x || '.' == x) price
     | otherwise = "-1"
     where rub = eliminate $ Map.lookup "RUB" currencyMap
           gbp = eliminate $ Map.lookup "GBP" currencyMap
           brl = eliminate $ Map.lookup "BRL" currencyMap
           eur = eliminate $ Map.lookup "EUR" currencyMap
-          eliminate (Just x) = x
-          eliminate Nothing = ""
 
-exchange :: String -> String -> String
+eliminate :: Maybe [a] -> [a]
+eliminate maybeValue = case maybeValue of (Just x) -> x
+                                          Nothing -> []
+
+exchange :: [CurrencyRate] -> String -> String -> String
+exchange rates cur price = printf "%.2f" $ (read price) * (currencyRate rates cur)
+    where currencyRate (x:xs) cur
+            | currency x == cur = rate x
+            | otherwise = currencyRate xs cur
+
+-- Remove the currency symbol from the price
+removeCurrency :: String -> String -> String
+removeCurrency [] _ = []
+removeCurrency price@(x:xs) [] = x : removeCurrency xs []
+removeCurrency price@(x:xs) currency@(y:ys)
+    | x == y = removeCurrency xs ys
+    | otherwise = x : removeCurrency xs currency
