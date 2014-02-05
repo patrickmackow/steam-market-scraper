@@ -191,10 +191,21 @@ trim ('\n':xs) = trim xs
 trim ('\t':xs) = trim xs
 trim (x:xs) = x : trim xs
 
+-- Convert the original listing currency to USD
+-- Returns "-1" if Sold! or unknown currency
 convert :: String -> String
 convert price
-    | liftM (`isInfixOf` price) Map.lookup "RUB" currencyMap = undefined
-    | "\163\&" `isInfixOf` price = undefined
-    | "R$" `isInfixOf` price = undefined
-    | "\8364" `isInfixOf` price = undefined
-    | otherwise = filter (\x -> isDigit x || '.' == x) price
+    | rub `isInfixOf` price = undefined
+    | gbp `isInfixOf` price = undefined
+    | brl `isInfixOf` price = undefined
+    | eur `isInfixOf` price = undefined
+    | "USD" `isInfixOf` price= filter (\x -> isDigit x || '.' == x) price
+    | otherwise = "-1"
+    where rub = eliminate $ Map.lookup "RUB" currencyMap
+          gbp = eliminate $ Map.lookup "GBP" currencyMap
+          brl = eliminate $ Map.lookup "BRL" currencyMap
+          eur = eliminate $ Map.lookup "EUR" currencyMap
+          eliminate (Just x) = x
+          eliminate Nothing = ""
+
+exchange :: String -> String -> String
