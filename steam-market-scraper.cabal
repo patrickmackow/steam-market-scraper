@@ -23,12 +23,14 @@ executable steam-market-scraper
   other-modules:       Paths_steam_market_scraper
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.7
-                     , tagsoup == 0.*
-                     , process == 1.*
-                     , directory == 1.*
-                     , postgresql-simple == 0.*
-                     , bytestring == 0.*
+                     , tagsoup == 0.13.*
+                     , process == 1.1.*
+                     , directory == 1.2.*
+                     , postgresql-simple == 0.4.*
+                     , bytestring == 0.10.*
+                     , SafeSemaphore == 0.10.*
   -- hs-source-dirs:      
+  ghc-options:         -threaded
   default-language:    Haskell2010
 
 
@@ -37,23 +39,23 @@ executable steam-listing-scraper
   other-modules:       Paths_steam_market_scraper
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.7
-                     , tagsoup == 0.*
-                     , process == 1.*
-                     , directory == 1.*
-                     , postgresql-simple == 0.*
-                     , bytestring == 0.*
-                     , aeson == 0.*
-                     , text == 1.*
-                     , containers == 0.*
+                     , tagsoup == 0.13.*
+                     , process == 1.1.*
+                     , directory == 1.2.*
+                     , postgresql-simple == 0.4.*
+                     , bytestring == 0.10.*
+                     , aeson == 0.7.*
+                     , text == 1.1.*
+                     , containers == 0.5.*
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
 executable currency-rates
   main-is:             currency-rates.hs
   build-depends:       base >=4.6 && <4.7
-                     , tagsoup == 0.*
-                     , aeson == 0.*
-                     , HTTP == 4000.*
-                     , text == 1.*
-                     , bytestring == 0.*
+                     , tagsoup == 0.13.*
+                     , aeson == 0.7.*
+                     , HTTP == 4000.2.*
+                     , text == 1.1.*
+                     , bytestring == 0.10.*
   default-language:    Haskell2010
