@@ -13,6 +13,10 @@ import Data.Int
 import qualified Data.ByteString.Char8 as B
 import Control.Applicative
 import Control.Monad
+import System.Environment
+import Control.Concurrent
+import Control.Concurrent.SSem
+import System.Exit
 
 import Paths_steam_market_scraper
 
@@ -37,14 +41,31 @@ instance FromRow MarketItem where
 
 main :: IO ()
 main = do
+    -- First argument is maximum number of threads
+    args <- getArgs
+    let maxThreads = read $ head args :: Int
+
+    -- Create semaphore with maximum amount of threads specified
+    sem <- new maxThreads
+
     -- Download all market pages
-    -- total <- readProcess "casperjs" ["market-total.js"
-    --     ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    total <- readProcess "casperjs" ["market-total.js"
+        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    let urls = generateUrls $ read . head . lines $ total
+    print urls
+    mapM_ forkOS $ map (scrapeMarket sem) urls
+    forever $ do
+        freeThreads <- getValue sem
+        if freeThreads /= maxThreads
+            then do
+                return ()
+            else do
+                exitSuccess
     -- scrapeMarket $ read . head . lines $ total
 
-    files <- getDirectoryContents "csgo-pages/"
-    let pages = filter (isSuffixOf ".html") files
-    print pages
+    -- files <- getDirectoryContents "csgo-pages/"
+    -- let pages = filter (isSuffixOf ".html") files
+    -- print pages
     -- items <- mapM (\x -> readMarketPage x) 
     --     $ fmap (\x -> "csgo-pages/" ++ x) pages
 
@@ -60,20 +81,39 @@ main = do
     -- print items
     -- print $ length items
 
--- Download all Steam Market pages
-scrapeMarket :: Int -> IO ()
-scrapeMarket 1 = do
-    handle <- runCommand $ ("casperjs market-page.js\
-    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show 1) ++ "' csgo-pages/")
+-- Generate URLs to scrape
+generateUrls :: Int -> [String]
+generateUrls 1 = ("casperjs market-page.js \
+    \'http://steamcommunity.com/market/search?q=appid%3A730#p" 
+        ++ (show 1) ++ "' csgo-pages/") : []
+generateUrls x = ("casperjs market-page.js \
+    \'http://steamcommunity.com/market/search?q=appid%3A730#p" 
+        ++ (show x) ++ "' csgo-pages/") : generateUrls (x - 1)
+
+scrapeMarket :: SSem -> String -> IO ()
+scrapeMarket sem url = do
+    wait sem
+    print $ "Starting " ++ url
+    handle <- runCommand url
     waitForProcess handle
+    print $ "Finished " ++ url
+    signal sem
     return ()
-scrapeMarket x = do
-    handle <- runCommand $ ("casperjs market-page.js\
-    \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show x) ++ "' csgo-pages/")
-    waitForProcess handle
-    scrapeMarket (x - 1)
+
+-- Download all Steam Market pages
+-- scrapeMarket :: Int -> IO ()
+-- scrapeMarket 1 = do
+--     handle <- runCommand $ ("casperjs market-page.js\
+--     \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
+--         ++ (show 1) ++ "' csgo-pages/")
+--     waitForProcess handle
+--     return ()
+-- scrapeMarket x = do
+--     handle <- runCommand $ ("casperjs market-page.js\
+--     \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
+--         ++ (show x) ++ "' csgo-pages/")
+--     waitForProcess handle
+--     scrapeMarket (x - 1)
 
 readMarketPage :: FilePath -> IO [MarketItem]
 readMarketPage path = do
