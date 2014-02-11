@@ -20,7 +20,7 @@ import System.Exit
 
 import Paths_steam_market_scraper
 
-data MarketItem = MarketItem 
+data MarketItem = MarketItem
     { url :: String
     , image :: String
     , quantity :: String
@@ -31,51 +31,51 @@ data MarketItem = MarketItem
     } deriving (Show, Eq)
 
 instance ToRow MarketItem where
-    toRow m = [toField (url m), toField (image m), toField (quantity m), 
-        toField (price m), toField (name m), toField (nameColour m), 
+    toRow m = [toField (url m), toField (image m), toField (quantity m),
+        toField (price m), toField (name m), toField (nameColour m),
         toField (game m)]
 
 instance FromRow MarketItem where
-    fromRow = MarketItem <$> field <*> field <*> field 
+    fromRow = MarketItem <$> field <*> field <*> field
         <*> field <*> field <*> field <*> field
 
 main :: IO ()
 main = do
     -- First argument is maximum number of threads
-    args <- getArgs
-    let maxThreads = read $ head args :: Int
+--     args <- getArgs
+--     let maxThreads = read $ head args :: Int
+--
+--     -- Create semaphore with maximum amount of threads specified
+--     sem <- new maxThreads
+--
+--     -- Download all market pages
+--     total <- readProcess "casperjs" ["market-total.js"
+--         ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+--     -- Exit with failure if steam market is down
+--     -- TODO: Email notification
+--     case total of "null\n" -> exitFailure
+--     let urls = generateUrls $ read . head . lines $ total
+--     print urls
+--     mapM_ forkOS $ map (scrapeMarket sem) urls
+--     forever $ do
+--         freeThreads <- getValue sem
+--         if freeThreads /= maxThreads
+--             then do
+--                 return ()
+--             else do
+--                 exitSuccess
 
-    -- Create semaphore with maximum amount of threads specified
-    sem <- new maxThreads
+    files <- getDirectoryContents "csgo-pages/"
+    let pages = filter (isSuffixOf ".html") files
+    print pages
+    items <- mapM (\x -> readMarketPage x)
+        $ fmap (\x -> "csgo-pages/" ++ x) pages
 
-    -- Download all market pages
-    total <- readProcess "casperjs" ["market-total.js"
-        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
-    let urls = generateUrls $ read . head . lines $ total
-    print urls
-    mapM_ forkOS $ map (scrapeMarket sem) urls
-    forever $ do
-        freeThreads <- getValue sem
-        if freeThreads /= maxThreads
-            then do
-                return ()
-            else do
-                exitSuccess
-    -- scrapeMarket $ read . head . lines $ total
-
-    -- files <- getDirectoryContents "csgo-pages/"
-    -- let pages = filter (isSuffixOf ".html") files
-    -- print pages
-    -- items <- mapM (\x -> readMarketPage x) 
-    --     $ fmap (\x -> "csgo-pages/" ++ x) pages
-
-    -- conn <- connect defaultConnectInfo { connectUser = "patrick"
-    --                                    , connectPassword = ""
-    --                                    , connectDatabase = "steam_market" }
-    -- storeItems conn $ nub $ concat items
-    -- count <- insertItems conn (nub $ concat items)
-    -- print count
-    -- close conn
+    conn <- connect defaultConnectInfo { connectUser = "patrick"
+                                       , connectPassword = "gecko787"
+                                       , connectDatabase = "steam_market" }
+    storeItems conn $ nub $ concat items
+    close conn
     -- test <- readFile "csgo-pages/50"
     -- let items = scrapeMarketPage test
     -- print items
@@ -84,10 +84,10 @@ main = do
 -- Generate URLs to scrape
 generateUrls :: Int -> [String]
 generateUrls 1 = ("casperjs market-page.js \
-    \'http://steamcommunity.com/market/search?q=appid%3A730#p" 
+    \'http://steamcommunity.com/market/search?q=appid%3A730#p"
         ++ (show 1) ++ "' csgo-pages/") : []
 generateUrls x = ("casperjs market-page.js \
-    \'http://steamcommunity.com/market/search?q=appid%3A730#p" 
+    \'http://steamcommunity.com/market/search?q=appid%3A730#p"
         ++ (show x) ++ "' csgo-pages/") : generateUrls (x - 1)
 
 scrapeMarket :: SSem -> String -> IO ()
@@ -100,42 +100,30 @@ scrapeMarket sem url = do
     signal sem
     return ()
 
--- Download all Steam Market pages
--- scrapeMarket :: Int -> IO ()
--- scrapeMarket 1 = do
---     handle <- runCommand $ ("casperjs market-page.js\
---     \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
---         ++ (show 1) ++ "' csgo-pages/")
---     waitForProcess handle
---     return ()
--- scrapeMarket x = do
---     handle <- runCommand $ ("casperjs market-page.js\
---     \ 'http://steamcommunity.com/market/search?q=appid%3A730#p"
---         ++ (show x) ++ "' csgo-pages/")
---     waitForProcess handle
---     scrapeMarket (x - 1)
-
 readMarketPage :: FilePath -> IO [MarketItem]
 readMarketPage path = do
     file <- readFile path
-    removeFile path
+    -- removeFile path
     return $ scrapeMarketPage file
 
-storeItems :: Connection -> [MarketItem] -> IO ()
-storeItems conn items = do
-    let select = Query $ B.pack "SELECT url FROM market"
-    existing <- query_ conn select
-    let existingStrings = fmap (\(Only url) -> B.unpack url) existing
-    -- forM_ existing $ \(Only url) -> print $ B.unpack url
-    print $ length existing
-    forM_ items $ \item -> checkItem conn existingStrings item
-    return ()
-
-checkItem :: Connection -> [String] -> MarketItem -> IO Int64
-checkItem conn existing item
-    | length existing == 0 = insertItem conn item
-    | (url item) `elem` existing = updateItem conn [quantity item, price item, url item]
-    | otherwise = insertItem conn item
+storeItems :: Connection -> [MarketItem] -> IO Int64
+storeItems conn (item:[]) = do
+    let select = Query $ B.pack $ "SELECT url, image, quantity, price, \
+        \item_name, item_name_colour, game FROM market WHERE \
+        \url = '" ++ url item ++ "'"
+    exists <- query_ conn select :: IO [MarketItem]
+    if length exists == 0
+        then insertItem conn item
+        else updateItem conn [quantity item, price item, url item]
+storeItems conn (item:items) = do
+    let select = Query $ B.pack $ "SELECT url, image, quantity, price, \
+        \item_name, item_name_colour, game FROM market WHERE \
+        \url = '" ++ url item ++ "'"
+    exists <- query_ conn select :: IO [MarketItem]
+    if length exists == 0
+        then insertItem conn item
+        else updateItem conn [quantity item, price item, url item]
+    storeItems conn items
 
 insertItem :: Connection -> MarketItem -> IO Int64
 insertItem conn item = execute conn insert item
@@ -190,12 +178,12 @@ scrapePrice item = g . fromTagText . head $ priceText
 
 scrapeName :: [Tag String] -> String
 scrapeName item = getTagText name
-    where name = head . sections (~== "<span\ 
+    where name = head . sections (~== "<span\
         \ class=market_listing_item_name>") $ item
 
 scrapeNameColour :: [Tag String] -> String
 scrapeNameColour item = f $ getAttrib "style" colour
-    where colour = head . sections (~== "<span\ 
+    where colour = head . sections (~== "<span\
         \ class=market_listing_item_name>") $ item
           -- Get CSS colour
           f :: String -> String
@@ -203,7 +191,7 @@ scrapeNameColour item = f $ getAttrib "style" colour
 
 scrapeGame :: [Tag String] -> String
 scrapeGame item = getTagText game
-    where game = head . sections (~== "<span\ 
+    where game = head . sections (~== "<span\
         \ class=market_listing_game_name>") $ item
 
 -- Util functions
