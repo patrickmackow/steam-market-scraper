@@ -41,7 +41,9 @@ casper.getListingRows = function() {
 };
 
 casper.parsePage = function(page, results) {
-    fs.write(scrapeDirectory + page + ".html", results.outerHTML, "w");
+    if(results.outerHTML != undefined) {
+        fs.write(scrapeDirectory + page + ".html", results.outerHTML, "w");
+    }
 };
 
 casper.getCurrentPage = function() {
