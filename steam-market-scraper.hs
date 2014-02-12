@@ -71,9 +71,10 @@ main = do
     items <- mapM (\x -> readMarketPage x)
         $ fmap (\x -> "csgo-pages/" ++ x) pages
 
-    conn <- connect defaultConnectInfo { connectUser = "patrick"
-                                       , connectPassword = "gecko787"
-                                       , connectDatabase = "steam_market" }
+    conn <- connect defaultConnectInfo 
+                        { connectUser = "patrick"
+                        , connectPassword = ""
+                        , connectDatabase = "steam_market" }
     storeItems conn $ nub $ concat items
     close conn
     -- test <- readFile "csgo-pages/50"

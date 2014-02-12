@@ -37,7 +37,7 @@ instance FromJSON CurrencyRate where
                            v .: T.pack "currency" <*>
                            v .: T.pack "rate"
 
-data MarketItem = MarketItem 
+data MarketItem = MarketItem
     { url :: String
     , image :: String
     , quantity :: String
@@ -48,23 +48,26 @@ data MarketItem = MarketItem
     } deriving (Show, Eq)
 
 instance ToRow MarketItem where
-    toRow m = [toField (url m), toField (image m), toField (quantity m), 
-        toField (price m), toField (name m), toField (nameColour m), 
+    toRow m = [toField (url m), toField (image m), toField (quantity m),
+        toField (price m), toField (name m), toField (nameColour m),
         toField (game m)]
 
 instance FromRow MarketItem where
-    fromRow = MarketItem <$> field <*> field <*> field 
+    fromRow = MarketItem <$> field <*> field <*> field
         <*> field <*> field <*> field <*> field
 
-data ItemListing = ItemListing 
+data ItemListing = ItemListing
     { listingNo :: String
     , itemUrl :: String
     , itemPrice :: String
     , priceBeforeFee :: String
     } deriving (Show, Eq)
 
+instance Ord ItemListing where
+    compare (ItemListing _ _ a _) (ItemListing _ _ b _) = compare a b
+
 instance ToRow ItemListing where
-    toRow i = [toField (listingNo i), toField (itemUrl i), 
+    toRow i = [toField (listingNo i), toField (itemUrl i),
         toField (itemPrice i), toField (priceBeforeFee i)]
 
 instance FromRow ItemListing where
@@ -76,7 +79,7 @@ main = do
     ratesFile <- B.L.readFile "rates.json"
     let maybeRates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
     print maybeRates
-    
+
     let rates = fmap (\(Just x) -> x)  maybeRates
     print rates
 
@@ -122,7 +125,8 @@ scrapeListings (url:urls) = do
     waitForProcess handle
     scrapeListings urls
 
-readListingsPage :: [CurrencyRate] -> FilePath -> IO [ItemListing]
+readListingsPage :: [CurrencyRate] -> FilePath ->
+    IO (Maybe [ItemListing], Maybe ItemListing)
 readListingsPage rates path = do
     file <- readFile path
     -- removeFile path
@@ -147,40 +151,67 @@ insertListings = undefined
 --              \VALUES (?,?,?,?,?,?,?)"
 
 -- Scrape info from market page
-scrapeListingsPage :: [CurrencyRate] -> String -> [ItemListing]
-scrapeListingsPage rates page = fmap (scrapeItemListing rates) listings
-    where listings = sections (~== TagOpen "div" [("id",""), ("class","")])
-                        $ parseTags page
+-- Returns a pair: left side is any underpriced ItemListing
+--                 right side is a normal priced ItemListing
+scrapeListingsPage :: [CurrencyRate] -> String ->
+    (Maybe [ItemListing], Maybe ItemListing)
+scrapeListingsPage rates page = findUnderpriced formatted
+    -- First line of file of listing url
+    where itemUrl = head . take 1 $ lines page
+          listings = sections (~== TagOpen "div" [("id",""), ("class","")])
+                        $ parseTags . unlines . drop 1 . lines $ page
+          formatted = sort . f $
+            fmap (scrapeItemListing rates itemUrl) listings
+          f xs = foldr g [] xs
+          g x xs = case x of Nothing -> xs
+                             Just x' -> (x':xs)
 
-scrapeItemListing :: [CurrencyRate] -> [Tag String] -> ItemListing
-scrapeItemListing rates listing = ItemListing listingNo itemUrl (fst price) (snd price)
-    where listingNo = "test"
-          itemUrl = "test"
+findUnderpriced :: [ItemListing] ->
+    (Maybe [ItemListing], Maybe ItemListing)
+findUnderpriced [] = (Nothing, Nothing)
+findUnderpriced (x:[]) = (Nothing, Just x)
+findUnderpriced items = case under of Nothing -> (under, Just $ head items)
+                                      _ -> (under, Just $ head $
+                                            drop underLength items)
+    where under = f items []
+          underLength = case under of Nothing -> 0
+                                      Just xs -> length xs
+          f :: [ItemListing] -> [ItemListing] -> Maybe [ItemListing]
+          f [] _ = Nothing
+          f (x:[]) _ = Nothing
+          f (x:xs) []
+            | itemPrice x < priceBeforeFee (head xs) = Just (x:[])
+            | otherwise = f xs (x:[])
+          f (x:xs) under
+            | itemPrice x < priceBeforeFee (head xs) = Just (x:under)
+            | otherwise = f xs (x:under)
+
+-- If listing is sold or has unknown currency return Nothing
+scrapeItemListing :: [CurrencyRate] -> String -> [Tag String] ->
+    Maybe ItemListing
+scrapeItemListing rates itemUrl listing =
+    case fst price of "-1" -> Nothing
+                      _ -> Just (ItemListing listingNo itemUrl
+                            (fst price) (snd price))
+    where listingNo = scrapeListingNo listing
           price = scrapePrice rates listing
 
-scrapeUrl :: [Tag String] -> String
-scrapeUrl = undefined
--- scrapeUrl item = getAttrib "href" item
+scrapeListingNo :: [Tag String] -> String
+scrapeListingNo listing = filter isDigit $ getAttrib "id" listingNo
+    where listingNo = head . sections (~== "<div>") $ listing
 
 -- Edge cases: "Sold!"
 scrapePrice :: [CurrencyRate] -> [Tag String] -> (String, String)
-scrapePrice rates listing = (convert rates . trim $ getTagText price, 
+scrapePrice rates listing = (convert rates . trim $ getTagText price,
     convert rates . trim $ getTagText priceBeforeFee)
-    where price = head . sections (~== "<span class='market_listing_price market_\
+    where price = head . sections (~== "<span class=\
+                    \'market_listing_price market_\
                     \listing_price_with_fee'>")
                     $ listing
-          priceBeforeFee  = head . sections (~== "<span class='market_listing_price market_\
+          priceBeforeFee  = head . sections (~== "<span class=\
+                                \'market_listing_price market_\
                                 \listing_price_without_fee'>")
                                 $ listing
--- scrapePrice item = g . fromTagText . head $ priceText
---     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
---           priceText = filter f $ filter isTagText priceTag
---           -- Find Tag which contains price
---           f :: Tag String -> Bool
---           f x = '$' `elem` fromTagText x
---           -- Get price only
---           g :: String -> String
---           g x = drop 1 . takeWhile (/= ' ') $ dropWhile (/= '$') x
 
 -- Util functions
 getAttrib :: String -> [Tag String] -> String
@@ -217,7 +248,8 @@ eliminate maybeValue = case maybeValue of (Just x) -> x
                                           Nothing -> []
 
 exchange :: [CurrencyRate] -> String -> String -> String
-exchange rates cur price = printf "%.2f" $ (read price) * (currencyRate rates cur)
+exchange rates cur price = printf "%.2f" $
+    (read price) * (currencyRate rates cur)
     where currencyRate (x:xs) cur
             | currency x == cur = rate x
             | otherwise = currencyRate xs cur
