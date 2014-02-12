@@ -42,7 +42,16 @@ casper.getListingRows = function() {
 
 casper.parsePage = function(page, results) {
     if(results.outerHTML != undefined) {
-        fs.write(scrapeDirectory + page + ".html", results.outerHTML, "w");
+        // Append url to the top of the page if it is a listing page
+        if (url.indexOf("/listings/") !== -1) {
+            fs.write(scrapeDirectory + page + ".html", url, "w");
+            fs.write(scrapeDirectory + page + ".html", "\n", "a");
+            fs.write(scrapeDirectory + page + ".html",
+                    results.outerHTML, "a");
+        } else {
+            fs.write(scrapeDirectory + page + ".html",
+                    results.outerHTML, "w");
+        }
     }
 };
 
