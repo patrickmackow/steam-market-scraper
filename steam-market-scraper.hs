@@ -28,8 +28,10 @@ data MarketItem = MarketItem
     , name :: String
     , nameColour :: String
     , game :: String
-    } deriving (Show, Eq)
+    } deriving (Show)
 
+instance Eq MarketItem where
+    x == y = url x == url y
 instance ToRow MarketItem where
     toRow m = [toField (url m), toField (image m), toField (quantity m),
         toField (price m), toField (name m), toField (nameColour m),
@@ -104,7 +106,7 @@ scrapeMarket sem url = do
 readMarketPage :: FilePath -> IO [MarketItem]
 readMarketPage path = do
     file <- readFile path
-    -- removeFile path
+    removeFile path
     return $ scrapeMarketPage file
 
 storeItems :: Connection -> [MarketItem] -> IO Int64
