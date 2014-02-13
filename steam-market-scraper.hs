@@ -16,6 +16,7 @@ import Control.Monad
 import System.Environment
 import Control.Concurrent
 import Control.Concurrent.SSem
+import Control.Concurrent.Chan
 import System.Exit
 
 import Paths_steam_market_scraper
@@ -32,6 +33,7 @@ data MarketItem = MarketItem
 
 instance Eq MarketItem where
     x == y = url x == url y
+
 instance ToRow MarketItem where
     toRow m = [toField (url m), toField (image m), toField (quantity m),
         toField (price m), toField (name m), toField (nameColour m),
@@ -44,45 +46,62 @@ instance FromRow MarketItem where
 main :: IO ()
 main = do
     -- First argument is maximum number of threads
---     args <- getArgs
---     let maxThreads = read $ head args :: Int
---
---     -- Create semaphore with maximum amount of threads specified
---     sem <- new maxThreads
---
---     -- Download all market pages
---     total <- readProcess "casperjs" ["market-total.js"
---         ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
---     -- Exit with failure if steam market is down
---     -- TODO: Email notification
---     case total of "null\n" -> exitFailure
---     let urls = generateUrls $ read . head . lines $ total
---     print urls
---     mapM_ forkOS $ map (scrapeMarket sem) urls
---     forever $ do
---         freeThreads <- getValue sem
---         if freeThreads /= maxThreads
---             then do
---                 return ()
---             else do
---                 exitSuccess
+    args <- getArgs
+    let maxThreads = read $ head args :: Int
 
-    files <- getDirectoryContents "csgo-pages/"
-    let pages = filter (isSuffixOf ".html") files
-    print pages
-    items <- mapM (\x -> readMarketPage x)
-        $ fmap (\x -> "csgo-pages/" ++ x) pages
+    -- Create semaphore with maximum amount of threads specified
+    sem <- new maxThreads
 
-    conn <- connect defaultConnectInfo 
-                        { connectUser = "patrick"
-                        , connectPassword = ""
-                        , connectDatabase = "steam_market" }
-    storeItems conn $ nub $ concat items
-    close conn
-    -- test <- readFile "csgo-pages/50"
-    -- let items = scrapeMarketPage test
-    -- print items
-    -- print $ length items
+    -- Download all market pages
+    total <- readProcess "casperjs" ["market-total.js"
+        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+    -- Exit with failure if steam market is down
+    -- TODO: Email notification
+    print total
+    if total == "null\n"
+        then exitFailure
+        else do
+            let urls = generateUrls $ read . head . lines $ total
+
+            conn <- connect defaultConnectInfo
+                                { connectUser = "patrick"
+                                , connectPassword = "gecko787"
+                                , connectDatabase = "steam_market" }
+
+            -- Create a chan for the status of the file reader
+            status <- newChan
+            -- Seperate thread checks directory for new files
+            forkIO $ forever $ do
+                files <- getDirectoryContents "csgo-pages/"
+                let pages = filter (isSuffixOf ".html") files
+
+                if pages == []
+                    then do
+                        writeChan status "done"
+                        threadDelay 1000000
+                    else do
+                        writeChan status "busy"
+                        forM_ (fmap (\x -> "csgo-pages/" ++ x) pages) $
+                            \x -> do
+                                items <- readMarketPage x
+                                storeItems conn $ nub $ items
+
+            mapM_ forkOS $ map (scrapeMarket sem) urls
+
+            forever $ do
+                freeThreads <- getValue sem
+                if freeThreads /= maxThreads
+                    then do
+                        threadDelay 5000000
+                        return ()
+                    else do
+                        message <- readChan status
+                        if message == "done"
+                            then do
+                                close conn
+                                exitSuccess
+                            else do
+                                return ()
 
 -- Generate URLs to scrape
 generateUrls :: Int -> [String]
@@ -110,6 +129,7 @@ readMarketPage path = do
     return $ scrapeMarketPage file
 
 storeItems :: Connection -> [MarketItem] -> IO Int64
+storeItems conn [] = return 0
 storeItems conn (item:[]) = do
     let select = Query $ B.pack $ "SELECT url, image, quantity, price, \
         \item_name, item_name_colour, game FROM market WHERE \
