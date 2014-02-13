@@ -132,8 +132,17 @@ readListingsPage rates path = do
     -- removeFile path
     return $ scrapeListingsPage rates file
 
-storeListings :: Connection -> [MarketItem] -> IO ()
-storeListings = undefined
+storeListings :: Connection -> (Maybe [ItemListing], Maybe ItemListing)
+    -> IO Int64
+storeListing _ (_, Nothing) = return 0
+storeListing conn (Nothing, Just listing) = do
+    insertListing conn listing
+    return 1
+storeListings conn (Just under, Just listing) = do
+    -- Get id of inserted listing to have a reference when checking profit
+    listingId <- insertListing conn listing
+    let listingId' = fromOnly $ head listingId
+    liftM sum $ forM under $ insertUnderpriced conn listingId'
 -- storeListings conn items = do
 --     let select = Query $ B.pack "SELECT url FROM market"
 --     existing <- query_ conn select
@@ -143,12 +152,25 @@ storeListings = undefined
 --     forM_ items $ \item -> checkItem conn existingStrings item
 --     return ()
 
-insertListings :: Connection -> MarketItem -> IO Int64
-insertListings = undefined
--- insertListings conn item = execute conn insert item
---     where insert = Query $ B.pack "INSERT INTO market (url, image, \
---              \quantity, price, item_name, item_name_colour, game) \
---              \VALUES (?,?,?,?,?,?,?)"
+insertListing :: Connection -> ItemListing -> IO [Only Int]
+insertListing conn item = query conn insert item
+    where insert = Query $ B.pack "INSERT INTO listing (listing_no, url, \
+            \item_price, item_price_before_fee) VALUES (?,?,?,?) RETURNING id"
+
+insertUnderpriced :: Connection -> Int -> ItemListing -> IO Int64
+insertUnderpriced conn listingId item = do
+    let select = Query $ B.pack "SELECT listing_no, url, item_price, \
+        \item_price_before_fee FROM underpriced WHERE listing_no = \
+        \'" ++ listingNo item ++ "'"
+    existing <- query_ conn select :: IO [ItemListing]
+    if length existing == 0
+        then do
+            let insert = Query $ B.pack "INSERT INTO underpriced \
+                \(listing_id, listing_no, url, item_price, item_price_before_fee) \
+                \VALUES ('" ++ listingId ++ "' ?,?,?,?)"
+        else do
+            return 0
+
 
 -- Scrape info from market page
 -- Returns a pair: left side is any underpriced ItemListing
