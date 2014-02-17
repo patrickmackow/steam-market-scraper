@@ -201,7 +201,7 @@ scrapeQuantity item = read . filter (/= ',') $ getTagText quantity
         \ class=market_listing_num_listings_qty>") $ item
 
 scrapePrice :: [Tag String] -> Int
-scrapePrice item = (*) 100 $ read . g . fromTagText . head $ priceText
+scrapePrice item = truncate $ (*) 100 $ read . g . fromTagText . head $ priceText
     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
           priceText = filter f $ filter isTagText priceTag
           -- Find Tag which contains price
