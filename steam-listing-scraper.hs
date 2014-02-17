@@ -40,8 +40,8 @@ instance FromJSON CurrencyRate where
 data MarketItem = MarketItem
     { url :: String
     , image :: String
-    , quantity :: String
-    , price :: String
+    , quantity :: Int
+    , price :: Int
     , name :: String
     , nameColour :: String
     , game :: String
@@ -59,14 +59,13 @@ instance FromRow MarketItem where
 data ItemListing = ItemListing
     { listingNo :: String
     , itemUrl :: String
-    , itemPrice :: String
-    , priceBeforeFee :: String
+    , itemPrice :: Int
+    , priceBeforeFee :: Int
     } deriving (Show, Eq)
 
 -- String numeric values are not the same as double numeric values
 instance Ord ItemListing where
-    compare (ItemListing _ _ a _) (ItemListing _ _ b _) =
-        compare (read a :: Double) (read b :: Double)
+    compare (ItemListing _ _ a _) (ItemListing _ _ b _) = compare a b
 
 instance ToRow ItemListing where
     toRow i = [toField (listingNo i), toField (itemUrl i),
@@ -168,8 +167,9 @@ insertUnderpriced conn listingId item = do
     if length existing == 0
         then do
             let insert = Query $ B.pack $ "INSERT INTO underpriced \
-                \(listing_id, listing_no, url, item_price, item_price_before_fee) \
-                \VALUES ('" ++ (show listingId) ++ "' ?,?,?,?)"
+                \(listing_id, listing_no, url, item_price, \
+                \item_price_before_fee) VALUES \
+                \('" ++ (show listingId) ++ "' ?,?,?,?)"
             execute conn insert item
         else do
             return 0
@@ -204,20 +204,17 @@ findUnderpriced items = case under of Nothing -> (under, Just $ head items)
           f [] _ = Nothing
           f (x:[]) _ = Nothing
           f (x:xs) []
-            | g (itemPrice x) (priceBeforeFee (head xs)) = Just (x:[])
+            | itemPrice x < priceBeforeFee (head xs) = Just (x:[])
             | otherwise = f xs (x:[])
           f (x:xs) under
-            | g (itemPrice x) (priceBeforeFee (head xs)) = Just (x:under)
+            | itemPrice x < priceBeforeFee (head xs) = Just (x:under)
             | otherwise = f xs (x:under)
-          -- Comparing Strings /= comparing Doubles
-          g :: String -> String -> Bool
-          g x y = (read x :: Double) < (read y :: Double)
 
 -- If listing is sold or has unknown currency return Nothing
 scrapeItemListing :: [CurrencyRate] -> String -> [Tag String] ->
     Maybe ItemListing
 scrapeItemListing rates itemUrl listing =
-    case fst price of "-1" -> Nothing
+    case fst price of (-1) -> Nothing
                       _ -> Just (ItemListing listingNo itemUrl
                             (fst price) (snd price))
     where listingNo = scrapeListingNo listing
@@ -228,7 +225,7 @@ scrapeListingNo listing = filter isDigit $ getAttrib "id" listingNo
     where listingNo = head . sections (~== "<div>") $ listing
 
 -- Edge cases: "Sold!", "12,--"
-scrapePrice :: [CurrencyRate] -> [Tag String] -> (String, String)
+scrapePrice :: [CurrencyRate] -> [Tag String] -> (Int, Int)
 scrapePrice rates listing = (convert rates . trim $ getTagText price,
     convert rates . trim $ getTagText priceBeforeFee)
     where price = head . sections (~== "<span class=\
@@ -258,14 +255,15 @@ trim (x:xs) = x : trim xs
 
 -- Convert the original listing currency to USD
 -- Returns "-1" if Sold! or unknown currency
-convert :: [CurrencyRate] -> String -> String
+convert :: [CurrencyRate] -> String -> Int
 convert rates price
     | rub `isInfixOf` price = exchange rates "RUB" $ removeCurrency price rub
     | gbp `isInfixOf` price = exchange rates "GBP" $ removeCurrency price gbp
     | brl `isInfixOf` price = exchange rates "BRL" $ removeCurrency price brl
     | eur `isInfixOf` price = exchange rates "EUR" $ removeCurrency price eur
-    | "USD" `isInfixOf` price = filter (\x -> isDigit x || '.' == x) price
-    | otherwise = "-1"
+    | "USD" `isInfixOf` price = truncate $ (*) 100 $ read $ 
+        filter (\x -> isDigit x || '.' == x) price
+    | otherwise = (-1)
     where rub = eliminate $ Map.lookup "RUB" currencyMap
           gbp = eliminate $ Map.lookup "GBP" currencyMap
           brl = eliminate $ Map.lookup "BRL" currencyMap
@@ -275,8 +273,9 @@ eliminate :: Maybe [a] -> [a]
 eliminate maybeValue = case maybeValue of (Just x) -> x
                                           Nothing -> []
 
-exchange :: [CurrencyRate] -> String -> String -> String
-exchange rates cur price = printf "%.2f" $
+exchange :: [CurrencyRate] -> String -> String -> Int
+-- Multiply final result by 100 because we are storing value as int
+exchange rates cur price = truncate $ (*) 100 $ 
     (read price) * (currencyRate rates cur)
     where currencyRate (x:xs) cur
             | currency x == cur = rate x

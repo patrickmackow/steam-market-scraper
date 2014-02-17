@@ -24,8 +24,8 @@ import Paths_steam_market_scraper
 data MarketItem = MarketItem
     { url :: String
     , image :: String
-    , quantity :: String
-    , price :: String
+    , quantity :: Int
+    , price :: Int
     , name :: String
     , nameColour :: String
     , game :: String
@@ -42,6 +42,16 @@ instance ToRow MarketItem where
 instance FromRow MarketItem where
     fromRow = MarketItem <$> field <*> field <*> field
         <*> field <*> field <*> field <*> field
+
+-- UpdatedMarketItem needs to be in this order for update statement
+data UpdatedMarketItem = UpdatedMarketItem
+    { quantity' :: Int
+    , price' :: Int
+    , url' :: String
+    }
+
+instance ToRow UpdatedMarketItem where
+    toRow m = [toField (quantity' m), toField (price' m), toField (url' m)]
 
 main :: IO ()
 main = do
@@ -137,7 +147,8 @@ storeItems conn (item:[]) = do
     exists <- query_ conn select :: IO [MarketItem]
     if length exists == 0
         then insertItem conn item
-        else updateItem conn [quantity item, price item, url item]
+        else updateItem conn
+            (UpdatedMarketItem (quantity item) (price item) (url item))
 storeItems conn (item:items) = do
     let select = Query $ B.pack $ "SELECT url, image, quantity, price, \
         \item_name, item_name_colour, game FROM market WHERE \
@@ -145,7 +156,8 @@ storeItems conn (item:items) = do
     exists <- query_ conn select :: IO [MarketItem]
     if length exists == 0
         then insertItem conn item
-        else updateItem conn [quantity item, price item, url item]
+        else updateItem conn
+            (UpdatedMarketItem (quantity item) (price item) (url item))
     storeItems conn items
 
 insertItem :: Connection -> MarketItem -> IO Int64
@@ -154,7 +166,7 @@ insertItem conn item = execute conn insert item
              \quantity, price, item_name, item_name_colour, game) \
              \VALUES (?,?,?,?,?,?,?)"
 
-updateItem :: Connection -> [String] -> IO Int64
+updateItem :: Connection -> UpdatedMarketItem -> IO Int64
 updateItem conn item = execute conn update item
     where update = Query $ B.pack "UPDATE market SET quantity = ?, \
              \price = ? WHERE url = ?"
@@ -183,13 +195,13 @@ scrapeImage :: [Tag String] -> String
 scrapeImage item = getAttrib "src" image
     where image = head . sections (~== "<img>") $ item
 
-scrapeQuantity :: [Tag String] -> String
-scrapeQuantity item = filter (/= ',') $ getTagText quantity
+scrapeQuantity :: [Tag String] -> Int
+scrapeQuantity item = read . filter (/= ',') $ getTagText quantity
     where quantity = head . sections (~== "<span\
         \ class=market_listing_num_listings_qty>") $ item
 
-scrapePrice :: [Tag String] -> String
-scrapePrice item = g . fromTagText . head $ priceText
+scrapePrice :: [Tag String] -> Int
+scrapePrice item = (*) 100 $ read . g . fromTagText . head $ priceText
     where priceTag = takeWhile (~/= "</span>") $ dropWhile (~/= "<br>") item
           priceText = filter f $ filter isTagText priceTag
           -- Find Tag which contains price
