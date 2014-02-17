@@ -63,8 +63,10 @@ data ItemListing = ItemListing
     , priceBeforeFee :: String
     } deriving (Show, Eq)
 
+-- String numeric values are not the same as double numeric values
 instance Ord ItemListing where
-    compare (ItemListing _ _ a _) (ItemListing _ _ b _) = compare a b
+    compare (ItemListing _ _ a _) (ItemListing _ _ b _) =
+        compare (read a :: Double) (read b :: Double)
 
 instance ToRow ItemListing where
     toRow i = [toField (listingNo i), toField (itemUrl i),
@@ -159,18 +161,18 @@ insertListing conn item = query conn insert item
 
 insertUnderpriced :: Connection -> Int -> ItemListing -> IO Int64
 insertUnderpriced conn listingId item = do
-    let select = Query $ B.pack "SELECT listing_no, url, item_price, \
+    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
         \item_price_before_fee FROM underpriced WHERE listing_no = \
         \'" ++ listingNo item ++ "'"
     existing <- query_ conn select :: IO [ItemListing]
     if length existing == 0
         then do
-            let insert = Query $ B.pack "INSERT INTO underpriced \
+            let insert = Query $ B.pack $ "INSERT INTO underpriced \
                 \(listing_id, listing_no, url, item_price, item_price_before_fee) \
-                \VALUES ('" ++ listingId ++ "' ?,?,?,?)"
+                \VALUES ('" ++ (show listingId) ++ "' ?,?,?,?)"
+            execute conn insert item
         else do
             return 0
-
 
 -- Scrape info from market page
 -- Returns a pair: left side is any underpriced ItemListing
@@ -202,11 +204,14 @@ findUnderpriced items = case under of Nothing -> (under, Just $ head items)
           f [] _ = Nothing
           f (x:[]) _ = Nothing
           f (x:xs) []
-            | itemPrice x < priceBeforeFee (head xs) = Just (x:[])
+            | g (itemPrice x) (priceBeforeFee (head xs)) = Just (x:[])
             | otherwise = f xs (x:[])
           f (x:xs) under
-            | itemPrice x < priceBeforeFee (head xs) = Just (x:under)
+            | g (itemPrice x) (priceBeforeFee (head xs)) = Just (x:under)
             | otherwise = f xs (x:under)
+          -- Comparing Strings /= comparing Doubles
+          g :: String -> String -> Bool
+          g x y = (read x :: Double) < (read y :: Double)
 
 -- If listing is sold or has unknown currency return Nothing
 scrapeItemListing :: [CurrencyRate] -> String -> [Tag String] ->
@@ -222,7 +227,7 @@ scrapeListingNo :: [Tag String] -> String
 scrapeListingNo listing = filter isDigit $ getAttrib "id" listingNo
     where listingNo = head . sections (~== "<div>") $ listing
 
--- Edge cases: "Sold!"
+-- Edge cases: "Sold!", "12,--"
 scrapePrice :: [CurrencyRate] -> [Tag String] -> (String, String)
 scrapePrice rates listing = (convert rates . trim $ getTagText price,
     convert rates . trim $ getTagText priceBeforeFee)
@@ -248,6 +253,7 @@ trim (' ':xs) = trim xs
 trim (',':xs) = '.' : trim xs
 trim ('\n':xs) = trim xs
 trim ('\t':xs) = trim xs
+trim ('-':xs) = '0' : trim xs
 trim (x:xs) = x : trim xs
 
 -- Convert the original listing currency to USD
