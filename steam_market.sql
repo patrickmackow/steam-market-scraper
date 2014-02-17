@@ -11,7 +11,7 @@ CREATE TABLE market (
 	url text UNIQUE NOT NULL,
 	image text NOT NULL,
 	quantity int NOT NULL,
-	price numeric(7,2) NOT NULL,
+	price int NOT NULL,
 	item_name text NOT NULL,
 	item_name_colour text NOT NULL,
 	game text NOT NULL
@@ -21,7 +21,7 @@ CREATE TABLE market_history (
 	id serial PRIMARY KEY,
 	url text REFERENCES market (url),
 	quantity int NOT NULL,
-	price numeric(7,2) NOT NULL,
+	price int NOT NULL,
 	market_timestamp timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
