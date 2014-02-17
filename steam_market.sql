@@ -4,14 +4,14 @@
 DROP TRIGGER IF EXISTS insert_market ON market;
 DROP FUNCTION IF EXISTS insert_market_history();
 DROP TABLE IF EXISTS market_history;
-DROP TABLE IF EXISTS market;
+DROP TABLE IF EXISTS market CASCADE;
 
 CREATE TABLE market (
 	id serial PRIMARY KEY,
 	url text UNIQUE NOT NULL,
 	image text NOT NULL,
-	quantity text NOT NULL,
-	price text NOT NULL,
+	quantity int NOT NULL,
+	price numeric(7,2) NOT NULL,
 	item_name text NOT NULL,
 	item_name_colour text NOT NULL,
 	game text NOT NULL
@@ -20,8 +20,8 @@ CREATE TABLE market (
 CREATE TABLE market_history (
 	id serial PRIMARY KEY,
 	url text REFERENCES market (url),
-	quantity text NOT NULL,
-	price text NOT NULL,
+	quantity int NOT NULL,
+	price numeric(7,2) NOT NULL,
 	market_timestamp timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
