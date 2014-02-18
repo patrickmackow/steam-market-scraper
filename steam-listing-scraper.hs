@@ -85,9 +85,9 @@ main = do
     print rates
 
     -- PostgreSQL database connection
-    -- conn <- connect defaultConnectInfo { connectUser = "patrick"
-    --                                    , connectPassword = "gecko787"
-    --                                    , connectDatabase = "steam_market" }
+    conn <- connect defaultConnectInfo { connectUser = "patrick"
+                                       , connectPassword = "gecko787"
+                                       , connectDatabase = "steam_market" }
     -- Download all listings
     -- urlsToScrape <- getUrlsToScrape conn
     -- print $ length urlsToScrape
@@ -103,8 +103,10 @@ main = do
 
     print listings
 
+    forM_ listings $ storeListings conn
+
     -- Close database connection
-    -- close conn
+    close conn
 
 getUrlsToScrape :: Connection -> IO [String]
 getUrlsToScrape conn = do
@@ -135,28 +137,33 @@ readListingsPage rates path = do
 
 storeListings :: Connection -> (Maybe [ItemListing], Maybe ItemListing)
     -> IO Int64
-storeListing _ (_, Nothing) = return 0
-storeListing conn (Nothing, Just listing) = do
-    insertListing conn listing
-    return 1
+storeListings _ (_, Nothing) = return 0
+-- Checks if there are any underpriced rows and deletes them because
+-- no new underpriced were found
+storeListings conn (Nothing, Just listing) = do
+    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
+        \item_price_before_fee FROM underpriced WHERE url = \
+        \'" ++ itemUrl listing ++ "'"
+    existing <- query_ conn select :: IO [ItemListing]
+    if length existing == 0
+        then do
+            insertListing conn listing
+            return 1
+        else do
+            deleteUnderpriced conn $ itemUrl listing
+            insertListing conn listing
+            return 1
 storeListings conn (Just under, Just listing) = do
     -- Get id of inserted listing to have a reference when checking profit
     listingId <- insertListing conn listing
     let listingId' = fromOnly $ head listingId
     liftM sum $ forM under $ insertUnderpriced conn listingId'
--- storeListings conn items = do
---     let select = Query $ B.pack "SELECT url FROM market"
---     existing <- query_ conn select
---     let existingStrings = fmap (\(Only url) -> B.unpack url) existing
---     -- forM_ existing $ \(Only url) -> print $ B.unpack url
---     print $ length existing
---     forM_ items $ \item -> checkItem conn existingStrings item
---     return ()
 
 insertListing :: Connection -> ItemListing -> IO [Only Int]
 insertListing conn item = query conn insert item
-    where insert = Query $ B.pack "INSERT INTO listing (listing_no, url, \
-            \item_price, item_price_before_fee) VALUES (?,?,?,?) RETURNING id"
+    where insert = Query $ B.pack "INSERT INTO listing_history (listing_no, \
+        \url, item_price, item_price_before_fee) VALUES (?,?,?,?) \
+        \RETURNING id"
 
 insertUnderpriced :: Connection -> Int -> ItemListing -> IO Int64
 insertUnderpriced conn listingId item = do
@@ -173,6 +180,12 @@ insertUnderpriced conn listingId item = do
             execute conn insert item
         else do
             return 0
+
+deleteUnderpriced :: Connection -> String -> IO Int64
+deleteUnderpriced conn url = do
+    let delete = Query $ B.pack $ "DELETE FROM underpriced WHERE url = \
+        \'" ++ url ++ "'"
+    execute_ conn delete
 
 -- Scrape info from market page
 -- Returns a pair: left side is any underpriced ItemListing
