@@ -18,6 +18,8 @@ import Control.Monad
 import Data.Aeson
 import qualified Data.Map as Map
 import Text.Printf
+import System.Environment
+import Control.Concurrent.SSem
 
 import Paths_steam_market_scraper
 
@@ -76,10 +78,17 @@ instance FromRow ItemListing where
 
 main :: IO ()
 main = do
+    -- First argument is maximum number of threads
+    -- args <- getArgs
+    -- let maxThreads = read $ head args :: Int
+
+    -- Create semaphore with maximum amount of threads specified
+    -- sem <- new maxThreads
+
     -- Read currency rates
     ratesFile <- B.L.readFile "rates.json"
     let maybeRates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
-    print maybeRates
+    -- print maybeRates
 
     let rates = fmap (\(Just x) -> x)  maybeRates
     print rates
@@ -110,7 +119,7 @@ main = do
 
 getUrlsToScrape :: Connection -> IO [String]
 getUrlsToScrape conn = do
-    let select = Query $ B.pack "SELECT url FROM market"
+    let select = Query $ B.pack "SELECT url FROM market LIMIT 10"
     urls <- query_ conn select
     let urlStrings = fmap (\(Only url) -> B.unpack url) urls
     return urlStrings
@@ -176,7 +185,7 @@ insertUnderpriced conn listingId item = do
             let insert = Query $ B.pack $ "INSERT INTO underpriced \
                 \(listing_id, listing_no, url, item_price, \
                 \item_price_before_fee) VALUES \
-                \('" ++ (show listingId) ++ "' ?,?,?,?)"
+                \(" ++ (show listingId) ++ ",?,?,?,?)"
             execute conn insert item
         else do
             return 0
@@ -197,7 +206,7 @@ scrapeListingsPage rates page = findUnderpriced formatted
     where itemUrl = head . take 1 $ lines page
           listings = sections (~== TagOpen "div" [("id",""), ("class","")])
                         $ parseTags . unlines . drop 1 . lines $ page
-          formatted = sort . f $
+          formatted = f $
             fmap (scrapeItemListing rates itemUrl) listings
           f xs = foldr g [] xs
           g x xs = case x of Nothing -> xs
