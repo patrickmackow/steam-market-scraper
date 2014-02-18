@@ -1,9 +1,6 @@
 ﻿-- Database: steam_market
 
 -- DROP DATABASE steam_market;
-DROP TRIGGER IF EXISTS insert_market ON market;
-DROP FUNCTION IF EXISTS insert_market_history();
-DROP TABLE IF EXISTS market_history;
 DROP TABLE IF EXISTS market CASCADE;
 
 CREATE TABLE market (
