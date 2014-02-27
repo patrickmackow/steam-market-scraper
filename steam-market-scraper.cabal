@@ -30,6 +30,8 @@ executable steam-market-scraper
                      , bytestring == 0.10.*
                      , SafeSemaphore == 0.10.*
                      , split == 0.2.*
+                     , ConfigFile == 1.1.*
+                     , MissingH == 1.2.*
   -- hs-source-dirs:      
   ghc-options:         -threaded
   default-language:    Haskell2010
@@ -50,6 +52,8 @@ executable steam-listing-scraper
                      , containers == 0.5.*
                      , SafeSemaphore == 0.10.*
                      , split == 0.2.*
+                     , ConfigFile == 1.1.*
+                     , MissingH == 1.2.*
   -- hs-source-dirs:      
   ghc-options:         -threaded
   default-language:    Haskell2010

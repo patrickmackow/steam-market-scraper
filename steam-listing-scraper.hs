@@ -5,6 +5,7 @@ import Control.Concurrent.SSem
 import Control.Monad
 import Data.Aeson
 import Data.Char
+import Data.Either.Utils
 import Data.Int
 import Data.List
 import Data.List.Split
@@ -22,6 +23,7 @@ import Text.HTML.TagSoup
 import Text.Printf
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as B.L
+import qualified Data.ConfigFile as C
 import qualified Data.Map as Map
 import qualified Data.Text as T
 
@@ -101,9 +103,9 @@ main = do
     proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
 
     -- PostgreSQL database connection
-    conn <- connect defaultConnectInfo { connectUser = "patrick"
-                                       , connectPassword = "gecko787"
-                                       , connectDatabase = "steam_market" }
+    connInfo <- getConnectInfo
+    conn <- connect connInfo
+
     -- Download all listings
     urlsToScrape <- getUrlsToScrape conn
     print $ length urlsToScrape
@@ -369,3 +371,14 @@ removeCurrency price@(x:xs) [] = x : removeCurrency xs []
 removeCurrency price@(x:xs) currency@(y:ys)
     | x == y = removeCurrency xs ys
     | otherwise = x : removeCurrency xs currency
+
+getConnectInfo :: IO ConnectInfo
+getConnectInfo = do
+    val <- C.readfile C.emptyCP "sms.conf"
+    let cp = forceEither val
+    let database = forceEither $ C.get cp "DEFAULT" "database"
+    let db_host = forceEither $ C.get cp "DEFAULT" "db_host"
+    let db_port = forceEither $ C.get cp "DEFAULT" "db_port"
+    let db_user = forceEither $ C.get cp "DEFAULT" "db_user"
+    let db_pass = forceEither $ C.get cp "DEFAULT" "db_pass"
+    return $ ConnectInfo db_host db_port db_user db_pass database

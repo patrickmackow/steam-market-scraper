@@ -4,6 +4,7 @@ import Control.Concurrent.Chan
 import Control.Concurrent.SSem
 import Control.Monad
 import Data.Char
+import Data.Either.Utils
 import Data.Int
 import Data.List
 import Data.List.Split
@@ -19,6 +20,7 @@ import System.IO
 import System.Process
 import Text.HTML.TagSoup
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ConfigFile as C
 
 import Paths_steam_market_scraper
 
@@ -63,6 +65,9 @@ main = do
     -- Create semaphore with maximum amount of threads specified
     sem <- new maxThreads
 
+    -- Read config file
+    connInfo <- getConnectInfo
+
     -- Read proxy list
     proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
 
@@ -78,10 +83,7 @@ main = do
         else do
             let urls = generateCommands (read . head . lines $ total) proxies
 
-            conn <- connect defaultConnectInfo
-                                { connectUser = "patrick"
-                                , connectPassword = "gecko787"
-                                , connectDatabase = "steam_market" }
+            conn <- connect connInfo
 
             -- Create a chan for the status of the file reader
             status <- newChan
@@ -248,3 +250,14 @@ getAttrib atr tag = fromAttrib atr . head . filter isTagOpen $ tag
 
 getTagText :: [Tag String] -> String
 getTagText = fromTagText . head . filter isTagText
+
+getConnectInfo :: IO ConnectInfo
+getConnectInfo = do
+    val <- C.readfile C.emptyCP "sms.conf"
+    let cp = forceEither val
+    let database = forceEither $ C.get cp "DEFAULT" "database"
+    let db_host = forceEither $ C.get cp "DEFAULT" "db_host"
+    let db_port = forceEither $ C.get cp "DEFAULT" "db_port"
+    let db_user = forceEither $ C.get cp "DEFAULT" "db_user"
+    let db_pass = forceEither $ C.get cp "DEFAULT" "db_pass"
+    return $ ConnectInfo db_host db_port db_user db_pass database
