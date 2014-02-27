@@ -1,23 +1,24 @@
-import Text.HTML.TagSoup
-import System.IO
-import System.Process
-import System.Directory
+import Control.Applicative
+import Control.Concurrent
+import Control.Concurrent.Chan
+import Control.Concurrent.SSem
+import Control.Monad
 import Data.Char
+import Data.Int
 import Data.List
+import Data.List.Split
 import Database.PostgreSQL.Simple
+import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.ToField
 import Database.PostgreSQL.Simple.ToRow
-import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.Types
-import Data.Int
-import qualified Data.ByteString.Char8 as B
-import Control.Applicative
-import Control.Monad
+import System.Directory
 import System.Environment
-import Control.Concurrent
-import Control.Concurrent.SSem
-import Control.Concurrent.Chan
 import System.Exit
+import System.IO
+import System.Process
+import Text.HTML.TagSoup
+import qualified Data.ByteString.Char8 as B
 
 import Paths_steam_market_scraper
 
@@ -62,16 +63,20 @@ main = do
     -- Create semaphore with maximum amount of threads specified
     sem <- new maxThreads
 
+    -- Read proxy list
+    proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
+
     -- Download all market pages
     total <- readProcess "casperjs" ["market-total.js"
         ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
     -- Exit with failure if steam market is down
     -- TODO: Email notification
     print total
+
     if total == "null\n"
         then exitFailure
         else do
-            let urls = generateUrls $ read . head . lines $ total
+            let urls = generateCommands (read . head . lines $ total) proxies
 
             conn <- connect defaultConnectInfo
                                 { connectUser = "patrick"
@@ -113,14 +118,22 @@ main = do
                             else do
                                 return ()
 
--- Generate URLs to scrape
-generateUrls :: Int -> [String]
-generateUrls 1 = ("casperjs market-page.js \
+-- Generate commands to run
+generateCommands :: Int -> [String] -> [String]
+generateCommands 1 (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+    \--proxy-auth=" ++ auth ++ " market-page.js \
     \'http://steamcommunity.com/market/search?q=appid%3A730#p"
         ++ (show 1) ++ "' csgo-pages/") : []
-generateUrls x = ("casperjs market-page.js \
+    where splitProxies = splitOn ":" proxy
+          ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
+          auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
+generateCommands x (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+    \--proxy-auth=" ++ auth ++ " market-page.js \
     \'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show x) ++ "' csgo-pages/") : generateUrls (x - 1)
+        ++ (show x) ++ "' csgo-pages/") : generateCommands (x - 1) proxies
+    where splitProxies = splitOn ":" proxy
+          ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
+          auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
 
 scrapeMarket :: SSem -> String -> IO ()
 scrapeMarket sem url = do

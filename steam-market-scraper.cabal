@@ -29,6 +29,7 @@ executable steam-market-scraper
                      , postgresql-simple == 0.4.*
                      , bytestring == 0.10.*
                      , SafeSemaphore == 0.10.*
+                     , split == 0.2.*
   -- hs-source-dirs:      
   ghc-options:         -threaded
   default-language:    Haskell2010
@@ -48,7 +49,9 @@ executable steam-listing-scraper
                      , text == 1.1.*
                      , containers == 0.5.*
                      , SafeSemaphore == 0.10.*
+                     , split == 0.2.*
   -- hs-source-dirs:      
+  ghc-options:         -threaded
   default-language:    Haskell2010
 
 executable currency-rates

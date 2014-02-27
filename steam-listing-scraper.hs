@@ -1,25 +1,29 @@
-import Text.HTML.TagSoup
-import System.IO
-import System.Process
-import System.Directory
-import Data.Char
-import Data.List
-import Database.PostgreSQL.Simple
-import Database.PostgreSQL.Simple.ToField
-import Database.PostgreSQL.Simple.ToRow
-import Database.PostgreSQL.Simple.FromRow
-import Database.PostgreSQL.Simple.Types
-import Data.Int
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as B.L
-import qualified Data.Text as T
 import Control.Applicative
+import Control.Concurrent
+import Control.Concurrent.Chan
+import Control.Concurrent.SSem
 import Control.Monad
 import Data.Aeson
-import qualified Data.Map as Map
-import Text.Printf
+import Data.Char
+import Data.Int
+import Data.List
+import Data.List.Split
+import Database.PostgreSQL.Simple
+import Database.PostgreSQL.Simple.FromRow
+import Database.PostgreSQL.Simple.ToField
+import Database.PostgreSQL.Simple.ToRow
+import Database.PostgreSQL.Simple.Types
+import System.Directory
 import System.Environment
-import Control.Concurrent.SSem
+import System.Exit
+import System.IO
+import System.Process
+import Text.HTML.TagSoup
+import Text.Printf
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as B.L
+import qualified Data.Map as Map
+import qualified Data.Text as T
 
 import Paths_steam_market_scraper
 
@@ -79,11 +83,11 @@ instance FromRow ItemListing where
 main :: IO ()
 main = do
     -- First argument is maximum number of threads
-    -- args <- getArgs
-    -- let maxThreads = read $ head args :: Int
+    args <- getArgs
+    let maxThreads = read $ head args :: Int
 
     -- Create semaphore with maximum amount of threads specified
-    -- sem <- new maxThreads
+    sem <- new maxThreads
 
     -- Read currency rates
     ratesFile <- B.L.readFile "rates.json"
@@ -93,55 +97,98 @@ main = do
     let rates = fmap (\(Just x) -> x)  maybeRates
     print rates
 
+    -- Read proxies files
+    proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
+
     -- PostgreSQL database connection
     conn <- connect defaultConnectInfo { connectUser = "patrick"
                                        , connectPassword = "gecko787"
                                        , connectDatabase = "steam_market" }
     -- Download all listings
-    -- urlsToScrape <- getUrlsToScrape conn
-    -- print $ length urlsToScrape
-    -- scrapeListings urlsToScrape
+    urlsToScrape <- getUrlsToScrape conn
+    print $ length urlsToScrape
 
-    files <- getDirectoryContents "csgo-listings/"
-    let filteredFiles = filter (isSuffixOf ".html") files
+    let urls = generateCommands urlsToScrape proxies
 
-    print filteredFiles
+    status <- newChan
+    -- Seperate thread checks directory for new files
+    forkIO $ forever $ do
+        files <- getDirectoryContents "csgo-listings/"
+        let pages = filter (isSuffixOf ".html") files
 
-    listings <- mapM (\x -> readListingsPage rates x)
-        $ fmap (\x -> "csgo-listings/" ++ x) filteredFiles
+        if pages == []
+            then do
+                writeChan status "done"
+                threadDelay 1000000
+            else do
+                writeChan status "busy"
+                forM_ (fmap (\x -> "csgo-listings/" ++ x) pages) $
+                    \x -> do
+                        listings <- readListingsPage rates x
+                        storeListings conn listings
 
-    print listings
+    mapM_ forkOS $ map (scrapeListing sem) urls
 
-    forM_ listings $ storeListings conn
-
-    -- Close database connection
-    close conn
+    forever $ do
+        freeThreads <- getValue sem
+        if freeThreads /= maxThreads
+            then do
+                threadDelay 5000000
+                return ()
+            else do
+                message <- readChan status
+                if message == "done"
+                    then do
+                        close conn
+                        exitSuccess
+                    else do
+                        return ()
 
 getUrlsToScrape :: Connection -> IO [String]
 getUrlsToScrape conn = do
-    let select = Query $ B.pack "SELECT url FROM market LIMIT 10"
+    let select = Query $ B.pack "SELECT DISTINCT m.url FROM market AS \
+        \m LEFT OUTER JOIN listing_history AS l ON m.url = l.url \
+        \WHERE l.id IS null OR m.url IN (SELECT DISTINCT url FROM \
+        \listing_history WHERE item_price > 10) OR m.url IN \
+        \(SELECT l.url FROM listing_history as l, market as m WHERE \
+        \l.url = m.url AND (l.item_price < 10) AND \
+        \(m.price > (l.item_price + 5)))"
     urls <- query_ conn select
     let urlStrings = fmap (\(Only url) -> B.unpack url) urls
     return urlStrings
 
--- Download all Steam Market pages
-scrapeListings :: [String] -> IO ()
-scrapeListings (url:[]) = do
-    handle <- runCommand $ ("casperjs market-page.js\
-        \ '" ++ url ++ "' csgo-listings/")
+-- Generate commands to run
+generateCommands :: [String] -> [String] -> [String]
+generateCommands [] _ = []
+generateCommands (x:[]) (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+    \--proxy-auth=" ++ auth ++ " market-page.js '" ++ x
+        ++ "' csgo-listings/") : []
+    where splitProxies = splitOn ":" proxy
+          ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
+          auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
+generateCommands (x:xs) (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+    \--proxy-auth=" ++ auth ++ " market-page.js '" ++ x
+        ++ "' csgo-listings/") : generateCommands xs proxies
+    where splitProxies = splitOn ":" proxy
+          ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
+          auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
+
+-- Download a steam listing page
+scrapeListing :: SSem -> String -> IO ()
+scrapeListing sem url = do
+    wait sem
+    print $ "Starting " ++ url
+    handle <- runCommand url
     waitForProcess handle
+    print $ "Finshed " ++ url
+    signal sem
     return ()
-scrapeListings (url:urls) = do
-    handle <- runCommand $ ("casperjs market-page.js\
-        \ '" ++ url ++ "' csgo-listings/")
-    waitForProcess handle
-    scrapeListings urls
 
 readListingsPage :: [CurrencyRate] -> FilePath ->
     IO (Maybe [ItemListing], Maybe ItemListing)
 readListingsPage rates path = do
     file <- readFile path
-    -- removeFile path
+    removeFile path
     return $ scrapeListingsPage rates file
 
 storeListings :: Connection -> (Maybe [ItemListing], Maybe ItemListing)
@@ -166,7 +213,16 @@ storeListings conn (Just under, Just listing) = do
     -- Get id of inserted listing to have a reference when checking profit
     listingId <- insertListing conn listing
     let listingId' = fromOnly $ head listingId
-    liftM sum $ forM under $ insertUnderpriced conn listingId'
+    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
+        \item_price_before_fee FROM underpriced WHERE url = \
+        \'" ++ itemUrl listing ++ "'"
+    existing <- query_ conn select :: IO [ItemListing]
+    if length existing == 0
+        then do
+            liftM sum $ forM under $ insertUnderpriced conn listingId'
+        else do
+            deleteUnderpriced conn $ itemUrl listing
+            liftM sum $ forM under $ insertUnderpriced conn listingId'
 
 insertListing :: Connection -> ItemListing -> IO [Only Int]
 insertListing conn item = query conn insert item
@@ -277,6 +333,7 @@ trim (x:xs) = x : trim xs
 
 -- Convert the original listing currency to USD
 -- Returns "-1" if Sold! or unknown currency
+-- If using US proxy USD is not shown
 convert :: [CurrencyRate] -> String -> Int
 convert rates price
     | rub `isInfixOf` price = exchange rates "RUB" $ removeCurrency price rub
@@ -284,6 +341,8 @@ convert rates price
     | brl `isInfixOf` price = exchange rates "BRL" $ removeCurrency price brl
     | eur `isInfixOf` price = exchange rates "EUR" $ removeCurrency price eur
     | "USD" `isInfixOf` price = truncate $ (*) 100 $ read $ 
+        filter (\x -> isDigit x || '.' == x) price
+    | "$" `isInfixOf` price = truncate $ (*) 100 $ read $
         filter (\x -> isDigit x || '.' == x) price
     | otherwise = (-1)
     where rub = eliminate $ Map.lookup "RUB" currencyMap
