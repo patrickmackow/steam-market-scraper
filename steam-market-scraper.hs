@@ -101,11 +101,14 @@ main = do
                         writeChan status "busy"
                         forM_ (fmap (\x -> "csgo-pages/" ++ x) pages) $
                             \x -> do
-                                items <- catch (readMarketPage x) (\e -> do
-                                    let err = show (e :: ErrorCall)
-                                    print $ "Error: " ++ err
-                                    return [])
-                                storeItems conn $ nub $ items
+                                eitherItems <- try $ readMarketPage x
+                                case eitherItems of
+                                    Left e -> do
+                                        let err = show (e :: ErrorCall)
+                                        print $ "Error: " ++ err
+                                        return 0
+                                    Right items -> do
+                                        storeItems conn $ nub $ items
 
             mapM_ forkOS $ map (scrapeMarket sem) urls
 
