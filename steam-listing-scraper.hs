@@ -2,6 +2,7 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Chan
 import Control.Concurrent.SSem
+import Control.Exception
 import Control.Monad
 import Data.Aeson
 import Data.Char
@@ -126,7 +127,10 @@ main = do
                 writeChan status "busy"
                 forM_ (fmap (\x -> "csgo-listings/" ++ x) pages) $
                     \x -> do
-                        listings <- readListingsPage rates x
+                        listings <- catch (readListingsPage rates x) (\e -> do
+                            let err = show (e :: ErrorCall)
+                            print $ "Error: " ++ err
+                            return (Nothing, Nothing))
                         storeListings conn listings
 
     mapM_ forkOS $ map (scrapeListing sem) urls
