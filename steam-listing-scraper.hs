@@ -20,6 +20,7 @@ import System.Environment
 import System.Exit
 import System.IO
 import System.Process
+import System.Random
 import Text.HTML.TagSoup
 import Text.Printf
 import qualified Data.ByteString.Char8 as B
@@ -27,6 +28,7 @@ import qualified Data.ByteString.Lazy.Char8 as B.L
 import qualified Data.ConfigFile as C
 import qualified Data.Map as Map
 import qualified Data.Text as T
+import Data.Time
 
 import Paths_steam_market_scraper
 
@@ -111,6 +113,9 @@ main = do
     urlsToScrape <- getUrlsToScrape conn
     print $ length urlsToScrape
 
+    insertLastRun conn
+    deleteAllUnderpriced conn
+
     let urls = generateCommands urlsToScrape proxies
 
     status <- newChan
@@ -186,7 +191,9 @@ generateCommands (x:xs) (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
 scrapeListing :: SSem -> String -> IO ()
 scrapeListing sem url = do
     wait sem
-    print $ "Starting " ++ url
+    time <- liftM (*1000) $ randomRIO(100, 250) :: IO Int
+    threadDelay time
+    print $ show time ++ ": Starting " ++ url
     handle <- runCommand url
     waitForProcess handle
     print $ "Finshed " ++ url
@@ -259,6 +266,18 @@ deleteUnderpriced :: Connection -> String -> IO Int64
 deleteUnderpriced conn url = do
     let delete = Query $ B.pack $ "DELETE FROM underpriced WHERE url = \
         \'" ++ url ++ "'"
+    execute_ conn delete
+
+insertLastRun :: Connection -> IO Int64
+insertLastRun conn = do
+    datetime <- getCurrentTime
+    let insert = Query $ B.pack $ "INSERT INTO last_run (latest_timestamp) \
+        \VALUES ('" ++ (show datetime) ++ "')"
+    execute_ conn insert
+
+deleteAllUnderpriced :: Connection -> IO Int64
+deleteAllUnderpriced conn = do
+    let delete = Query $ B.pack $ "DELETE FROM underpriced"
     execute_ conn delete
 
 -- Scrape info from market page

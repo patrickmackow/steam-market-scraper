@@ -19,6 +19,7 @@ import System.Environment
 import System.Exit
 import System.IO
 import System.Process
+import System.Random
 import Text.HTML.TagSoup
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ConfigFile as C
@@ -147,7 +148,9 @@ generateCommands x (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
 scrapeMarket :: SSem -> String -> IO ()
 scrapeMarket sem url = do
     wait sem
-    print $ "Starting " ++ url
+    time <- liftM (*1000) $ randomRIO(100, 250) :: IO Int
+    threadDelay time
+    print $ show time ++ ": Starting " ++ url
     handle <- runCommand url
     waitForProcess handle
     print $ "Finished " ++ url
