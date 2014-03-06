@@ -75,5 +75,10 @@ executable proxy-checker
   main-is:             proxy-checker.hs
   build-depends:       base >= 4.6 && <4.7
                      , ConfigFile == 1.1.*
-  default-language:    Haskell2010
+                     , MissingH == 1.2.*
+                     , HTTP == 4000.2.*
+                     , split == 0.2.*
+                     , SafeSemaphore == 0.10.*
+                     , stm == 2.4.*
+  ghc-options:         -threaded
   default-language:    Haskell2010
