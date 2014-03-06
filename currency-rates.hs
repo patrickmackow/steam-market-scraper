@@ -1,10 +1,10 @@
-import Text.HTML.TagSoup
+import Data.Aeson
 import Network.HTTP
 import Network.Stream
-import Data.Aeson
-import qualified Data.Text as T
 import System.IO
+import Text.HTML.TagSoup
 import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Data.Text as T
 
 ratesURLs = [ 
     "http://www.xe.com/currencyconverter/convert/?Amount=1&From=RUB&To=USD",
