@@ -12,11 +12,13 @@ var casper = require("casper").create({
         userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0)" +
         + " Gecko/20100101 Firefox/25.0"
     },
-    timeout: 60000
 });
 
 var url = casper.cli.get(0);
-var scrapeDirectory = casper.cli.get(1);
+var timeout = casper.cli.get(1);
+var scrapeDirectory = casper.cli.get(2);
+
+casper.options.timeout = timeout;
 
 // FileSystem module
 var fs = require("fs");
@@ -44,7 +46,10 @@ casper.getListingRows = function() {
 casper.parsePage = function(page, results) {
     if(results.outerHTML != undefined) {
         // Append url to the top of the page if it is a listing page
-        if (url.indexOf("/listings/") !== -1) {
+        if (scrapeDirectory === "/dev/null/") {
+            fs.write("/dev/null", results.outerHTML, "w");
+        }
+        else if (url.indexOf("/listings/") !== -1) {
             fs.write(scrapeDirectory + page + ".html", url, "w");
             fs.write(scrapeDirectory + page + ".html", "\n", "a");
             fs.write(scrapeDirectory + page + ".html",
