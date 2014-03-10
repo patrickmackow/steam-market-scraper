@@ -207,7 +207,10 @@ readListingsPage :: [CurrencyRate] -> FilePath ->
 readListingsPage rates path = do
     file <- readFile path
     removeFile path
-    return $ scrapeListingsPage rates file
+    -- Check for empty file
+    if (length $ lines file) == 0
+        then return (Nothing, Nothing)
+        else return $ scrapeListingsPage rates file
 
 storeListings :: Connection -> (Maybe [ItemListing], Maybe ItemListing)
     -> IO Int64
@@ -321,6 +324,7 @@ findUnderpriced items = case under of Nothing -> (under, Just $ head items)
 -- If listing is sold or has unknown currency return Nothing
 scrapeItemListing :: [CurrencyRate] -> String -> [Tag String] ->
     Maybe ItemListing
+scrapeItemListing _ _ [] = Nothing
 scrapeItemListing rates itemUrl listing =
     case fst price of (-1) -> Nothing
                       _ -> Just (ItemListing listingNo itemUrl
@@ -329,11 +333,13 @@ scrapeItemListing rates itemUrl listing =
           price = scrapePrice rates listing
 
 scrapeListingNo :: [Tag String] -> String
+scrapeListingNo [] = ""
 scrapeListingNo listing = filter isDigit $ getAttrib "id" listingNo
     where listingNo = head . sections (~== "<div>") $ listing
 
 -- Edge cases: "Sold!", "12,--"
 scrapePrice :: [CurrencyRate] -> [Tag String] -> (Int, Int)
+scrapePrice _ [] = ((-1), (-1))
 scrapePrice rates listing = (convert rates . trim $ getTagText price,
     convert rates . trim $ getTagText priceBeforeFee)
     where price = head . sections (~== "<span class=\
@@ -347,10 +353,12 @@ scrapePrice rates listing = (convert rates . trim $ getTagText price,
 
 -- Util functions
 getAttrib :: String -> [Tag String] -> String
+getAttrib _ [] = ""
 getAttrib atr tag = fromAttrib atr . head . filter isTagOpen $ tag
 
 getTagText :: [Tag String] -> String
-getTagText = fromTagText . head . filter isTagText
+getTagText [] = ""
+getTagText tag = fromTagText . head . filter isTagText $ tag
 
 trim :: String -> String
 trim [] = []
@@ -365,6 +373,7 @@ trim (x:xs) = x : trim xs
 -- Returns "-1" if Sold! or unknown currency
 -- If using US proxy USD is not shown
 convert :: [CurrencyRate] -> String -> Int
+convert _ [] = (-1)
 convert rates price
     | rub `isInfixOf` price = exchange rates "RUB" $ removeCurrency price rub
     | gbp `isInfixOf` price = exchange rates "GBP" $ removeCurrency price gbp
