@@ -103,7 +103,8 @@ main = do
     print rates
 
     -- Read proxies files
-    proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
+    timeout <- liftM last $ liftM lines $ readFile "proxies.txt"
+    proxies <- liftM cycle $ liftM init $ liftM lines $ readFile "proxies.txt"
 
     -- PostgreSQL database connection
     connInfo <- getConnectInfo
@@ -116,7 +117,7 @@ main = do
     insertLastRun conn
     deleteAllUnderpriced conn
 
-    let urls = generateCommands urlsToScrape proxies
+    let urls = generateCommands urlsToScrape proxies timeout
 
     status <- newChan
     -- Seperate thread checks directory for new files
@@ -172,17 +173,18 @@ getUrlsToScrape conn = do
     return urlStrings
 
 -- Generate commands to run
-generateCommands :: [String] -> [String] -> [String]
-generateCommands [] _ = []
-generateCommands (x:[]) (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
-    \--proxy-auth=" ++ auth ++ " market-page.js '" ++ x
-        ++ "' csgo-listings/") : []
+generateCommands :: [String] -> [String] -> String -> [String]
+generateCommands [] _ _ = []
+generateCommands (x:[]) (proxy:proxies) timeout = ("casperjs --proxy="
+        ++ ip ++ " --proxy-auth=" ++ auth ++ " market-page.js '" ++ x
+        ++ "' " ++ timeout ++ " csgo-listings/") : []
     where splitProxies = splitOn ":" proxy
           ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
           auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
-generateCommands (x:xs) (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
-    \--proxy-auth=" ++ auth ++ " market-page.js '" ++ x
-        ++ "' csgo-listings/") : generateCommands xs proxies
+generateCommands (x:xs) (proxy:proxies) timeout = ("casperjs --proxy="
+        ++ ip ++ " --proxy-auth=" ++ auth ++ " market-page.js '" ++ x
+        ++ "' " ++ timeout ++ " csgo-listings/")
+        : generateCommands xs proxies timeout
     where splitProxies = splitOn ":" proxy
           ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
           auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)

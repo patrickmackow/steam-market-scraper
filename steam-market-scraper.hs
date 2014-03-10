@@ -71,11 +71,12 @@ main = do
     connInfo <- getConnectInfo
 
     -- Read proxy list
-    proxies <- liftM cycle $ liftM lines $ readFile "proxies.txt"
+    timeout <- liftM last $ liftM lines $ readFile "proxies.txt"
+    proxies <- liftM cycle $ liftM init $ liftM lines $ readFile "proxies.txt"
 
     -- Download all market pages
     total <- readProcess "casperjs" ["market-total.js"
-        ,"http://steamcommunity.com/market/search?q=appid%3A730"] []
+        ,"http://steamcommunity.com/market/search?q=appid%3A730", timeout] []
     -- Exit with failure if steam market is down
     -- TODO: Email notification
     print total
@@ -83,7 +84,8 @@ main = do
     if total == "null\n"
         then exitFailure
         else do
-            let urls = generateCommands (read . head . lines $ total) proxies
+            let urls = generateCommands (read . head . lines $ total)
+                    proxies timeout
 
             conn <- connect connInfo
 
@@ -129,18 +131,19 @@ main = do
                                 return ()
 
 -- Generate commands to run
-generateCommands :: Int -> [String] -> [String]
-generateCommands 1 (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+generateCommands :: Int -> [String] -> String -> [String]
+generateCommands 1 (proxy:proxies) timeout = ("casperjs --proxy=" ++ ip ++ " \
     \--proxy-auth=" ++ auth ++ " market-page.js \
     \'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show 1) ++ "' csgo-pages/") : []
+        ++ (show 1) ++ "' " ++ timeout ++ " csgo-pages/") : []
     where splitProxies = splitOn ":" proxy
           ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
           auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
-generateCommands x (proxy:proxies) = ("casperjs --proxy=" ++ ip ++ " \
+generateCommands x (proxy:proxies) timeout = ("casperjs --proxy=" ++ ip ++ " \
     \--proxy-auth=" ++ auth ++ " market-page.js \
     \'http://steamcommunity.com/market/search?q=appid%3A730#p"
-        ++ (show x) ++ "' csgo-pages/") : generateCommands (x - 1) proxies
+        ++ (show x) ++ "' " ++ timeout ++ " csgo-pages/")
+        : generateCommands (x - 1) proxies timeout
     where splitProxies = splitOn ":" proxy
           ip = (splitProxies !! 0) ++ ":" ++ (splitProxies !! 1)
           auth = (splitProxies !! 2) ++ ":" ++ (splitProxies !! 3)
