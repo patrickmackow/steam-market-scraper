@@ -10,11 +10,13 @@ var casper = require("casper").create({
         userAgent: "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0)"
         + " Gecko/20100101 Firefox/25.0"
     },
-    timeout: 15000
 });
 
 // First arguement is url
 var url = casper.cli.get(0);
+var timeout = casper.cli.get(1);
+
+casper.options.timeout = timeout;
 
 // FileSystem module
 var fs = require("fs");
