@@ -15,3 +15,4 @@ rates.json
 proxies.txt
 sms.conf
 proxy-checker.conf
+conf.d/directory-watcher.conf
