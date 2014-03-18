@@ -11,10 +11,8 @@ import Data.Int
 import Data.List
 import Data.List.Split
 import Database.PostgreSQL.Simple
-import Database.PostgreSQL.Simple.FromRow
-import Database.PostgreSQL.Simple.ToField
-import Database.PostgreSQL.Simple.ToRow
 import Database.PostgreSQL.Simple.Types
+import MarketTypes
 import System.Directory
 import System.Environment
 import System.Exit
@@ -47,43 +45,6 @@ instance FromJSON CurrencyRate where
     parseJSON (Object v) = CurrencyRate <$>
                            v .: T.pack "currency" <*>
                            v .: T.pack "rate"
-
-data MarketItem = MarketItem
-    { url :: String
-    , image :: String
-    , quantity :: Int
-    , price :: Int
-    , name :: String
-    , nameColour :: String
-    , game :: String
-    } deriving (Show, Eq)
-
-instance ToRow MarketItem where
-    toRow m = [toField (url m), toField (image m), toField (quantity m),
-        toField (price m), toField (name m), toField (nameColour m),
-        toField (game m)]
-
-instance FromRow MarketItem where
-    fromRow = MarketItem <$> field <*> field <*> field
-        <*> field <*> field <*> field <*> field
-
-data ItemListing = ItemListing
-    { listingNo :: String
-    , itemUrl :: String
-    , itemPrice :: Int
-    , priceBeforeFee :: Int
-    } deriving (Show, Eq)
-
--- String numeric values are not the same as double numeric values
-instance Ord ItemListing where
-    compare (ItemListing _ _ a _) (ItemListing _ _ b _) = compare a b
-
-instance ToRow ItemListing where
-    toRow i = [toField (listingNo i), toField (itemUrl i),
-        toField (itemPrice i), toField (priceBeforeFee i)]
-
-instance FromRow ItemListing where
-    fromRow = ItemListing <$> field <*> field <*> field <*> field
 
 main :: IO ()
 main = do

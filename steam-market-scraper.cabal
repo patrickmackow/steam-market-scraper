@@ -103,3 +103,9 @@ executable file-scraper
   build-depends:       base >= 4.6 && <4.7
   ghc-options:         -threaded
   default-language:    Haskell2010
+
+library
+  build-depends:       base >= 4.6 && <4.7
+                     , postgresql-simple == 0.4.*
+  exposed-modules:     MarketTypes
+  default-language:    Haskell2010

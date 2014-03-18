@@ -10,10 +10,8 @@ import Data.Int
 import Data.List
 import Data.List.Split
 import Database.PostgreSQL.Simple
-import Database.PostgreSQL.Simple.FromRow
-import Database.PostgreSQL.Simple.ToField
-import Database.PostgreSQL.Simple.ToRow
 import Database.PostgreSQL.Simple.Types
+import MarketTypes
 import System.Directory
 import System.Environment
 import System.Exit
@@ -25,38 +23,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ConfigFile as C
 
 import Paths_steam_market_scraper
-
-data MarketItem = MarketItem
-    { url :: String
-    , image :: String
-    , quantity :: Int
-    , price :: Int
-    , name :: String
-    , nameColour :: String
-    , game :: String
-    } deriving (Show)
-
-instance Eq MarketItem where
-    x == y = url x == url y
-
-instance ToRow MarketItem where
-    toRow m = [toField (url m), toField (image m), toField (quantity m),
-        toField (price m), toField (name m), toField (nameColour m),
-        toField (game m)]
-
-instance FromRow MarketItem where
-    fromRow = MarketItem <$> field <*> field <*> field
-        <*> field <*> field <*> field <*> field
-
--- UpdatedMarketItem needs to be in this order for update statement
-data UpdatedMarketItem = UpdatedMarketItem
-    { quantity' :: Int
-    , price' :: Int
-    , url' :: String
-    }
-
-instance ToRow UpdatedMarketItem where
-    toRow m = [toField (quantity' m), toField (price' m), toField (url' m)]
 
 main :: IO ()
 main = do
