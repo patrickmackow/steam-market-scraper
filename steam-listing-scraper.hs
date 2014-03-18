@@ -1,67 +1,32 @@
-import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.Chan
 import Control.Concurrent.SSem
-import Control.Exception
 import Control.Monad
-import Data.Aeson
-import Data.Char
-import Data.Either.Utils
 import Data.Int
 import Data.List
 import Data.List.Split
+import Data.Time
 import Database.PostgreSQL.Simple
 import Database.PostgreSQL.Simple.Types
-import MarketTypes
-import System.Directory
 import System.Environment
 import System.Exit
 import System.IO
 import System.Process
 import System.Random
-import Text.HTML.TagSoup
-import Text.Printf
+import Utils
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as B.L
-import qualified Data.ConfigFile as C
-import qualified Data.Map as Map
-import qualified Data.Text as T
-import Data.Time
-
-import Paths_steam_market_scraper
-
-currencies = [ ("RUB", "p\1091\1073.")
-             , ("GBP", "\163\&")
-             , ("BRL", "R$")
-             , ("EUR", "\8364")]
-currencyMap = Map.fromList currencies
-
-data CurrencyRate = CurrencyRate
-    { currency :: String
-    , rate :: Double
-    } deriving (Show)
-
-instance FromJSON CurrencyRate where
-    parseJSON (Object v) = CurrencyRate <$>
-                           v .: T.pack "currency" <*>
-                           v .: T.pack "rate"
 
 main :: IO ()
 main = do
     -- First argument is maximum number of threads
     args <- getArgs
+    if (length args == 0)
+        then exitFailure -- Exit if no arguments found
+        else return ()
+
     let maxThreads = read $ head args :: Int
 
     -- Create semaphore with maximum amount of threads specified
     sem <- new maxThreads
-
-    -- Read currency rates
-    ratesFile <- B.L.readFile "rates.json"
-    let maybeRates = fmap decode $ B.L.lines ratesFile :: [Maybe CurrencyRate]
-    -- print maybeRates
-
-    let rates = fmap (\(Just x) -> x)  maybeRates
-    print rates
 
     -- Read proxies files
     timeout <- liftM last $ liftM lines $ readFile "proxies.txt"
@@ -80,29 +45,6 @@ main = do
 
     let urls = generateCommands urlsToScrape proxies timeout
 
-    status <- newChan
-    -- Seperate thread checks directory for new files
-    forkIO $ forever $ do
-        files <- getDirectoryContents "csgo-listings/"
-        let pages = filter (isSuffixOf ".html") files
-
-        if pages == []
-            then do
-                writeChan status "done"
-                threadDelay 1000000
-            else do
-                writeChan status "busy"
-                forM_ (fmap (\x -> "csgo-listings/" ++ x) pages) $
-                    \x -> do
-                        eitherListings <- try $ readListingsPage rates x
-                        case eitherListings of
-                            Left e -> do
-                                let err = show (e :: ErrorCall)
-                                print $ "Error: " ++ err
-                                return 0
-                            Right listings -> do
-                                storeListings conn listings
-
     mapM_ forkOS $ map (scrapeListing sem) urls
 
     forever $ do
@@ -110,15 +52,9 @@ main = do
         if freeThreads /= maxThreads
             then do
                 threadDelay 5000000
-                return ()
             else do
-                message <- readChan status
-                if message == "done"
-                    then do
-                        close conn
-                        exitSuccess
-                    else do
-                        return ()
+                close conn
+                exitSuccess
 
 getUrlsToScrape :: Connection -> IO [String]
 getUrlsToScrape conn = do
@@ -163,77 +99,6 @@ scrapeListing sem url = do
     signal sem
     return ()
 
-readListingsPage :: [CurrencyRate] -> FilePath ->
-    IO (Maybe [ItemListing], Maybe ItemListing)
-readListingsPage rates path = do
-    file <- readFile path
-    removeFile path
-    -- Check for empty file
-    if (length $ lines file) == 0
-        then return (Nothing, Nothing)
-        else return $ scrapeListingsPage rates file
-
-storeListings :: Connection -> (Maybe [ItemListing], Maybe ItemListing)
-    -> IO Int64
-storeListings _ (_, Nothing) = return 0
--- Checks if there are any underpriced rows and deletes them because
--- no new underpriced were found
-storeListings conn (Nothing, Just listing) = do
-    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
-        \item_price_before_fee FROM underpriced WHERE url = \
-        \'" ++ itemUrl listing ++ "'"
-    existing <- query_ conn select :: IO [ItemListing]
-    if length existing == 0
-        then do
-            insertListing conn listing
-            return 1
-        else do
-            deleteUnderpriced conn $ itemUrl listing
-            insertListing conn listing
-            return 1
-storeListings conn (Just under, Just listing) = do
-    -- Get id of inserted listing to have a reference when checking profit
-    listingId <- insertListing conn listing
-    let listingId' = fromOnly $ head listingId
-    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
-        \item_price_before_fee FROM underpriced WHERE url = \
-        \'" ++ itemUrl listing ++ "'"
-    existing <- query_ conn select :: IO [ItemListing]
-    if length existing == 0
-        then do
-            liftM sum $ forM under $ insertUnderpriced conn listingId'
-        else do
-            deleteUnderpriced conn $ itemUrl listing
-            liftM sum $ forM under $ insertUnderpriced conn listingId'
-
-insertListing :: Connection -> ItemListing -> IO [Only Int]
-insertListing conn item = query conn insert item
-    where insert = Query $ B.pack "INSERT INTO listing_history (listing_no, \
-        \url, item_price, item_price_before_fee) VALUES (?,?,?,?) \
-        \RETURNING id"
-
-insertUnderpriced :: Connection -> Int -> ItemListing -> IO Int64
-insertUnderpriced conn listingId item = do
-    let select = Query $ B.pack $ "SELECT listing_no, url, item_price, \
-        \item_price_before_fee FROM underpriced WHERE listing_no = \
-        \'" ++ listingNo item ++ "'"
-    existing <- query_ conn select :: IO [ItemListing]
-    if length existing == 0
-        then do
-            let insert = Query $ B.pack $ "INSERT INTO underpriced \
-                \(listing_id, listing_no, url, item_price, \
-                \item_price_before_fee) VALUES \
-                \(" ++ (show listingId) ++ ",?,?,?,?)"
-            execute conn insert item
-        else do
-            return 0
-
-deleteUnderpriced :: Connection -> String -> IO Int64
-deleteUnderpriced conn url = do
-    let delete = Query $ B.pack $ "DELETE FROM underpriced WHERE url = \
-        \'" ++ url ++ "'"
-    execute_ conn delete
-
 insertLastRun :: Connection -> IO Int64
 insertLastRun conn = do
     datetime <- getCurrentTime
@@ -245,138 +110,3 @@ deleteAllUnderpriced :: Connection -> IO Int64
 deleteAllUnderpriced conn = do
     let delete = Query $ B.pack $ "DELETE FROM underpriced"
     execute_ conn delete
-
--- Scrape info from market page
--- Returns a pair: left side is any underpriced ItemListing
---                 right side is a normal priced ItemListing
-scrapeListingsPage :: [CurrencyRate] -> String ->
-    (Maybe [ItemListing], Maybe ItemListing)
-scrapeListingsPage rates page = findUnderpriced formatted
-    -- First line of file of listing url
-    where itemUrl = head . take 1 $ lines page
-          listings = sections (~== TagOpen "div" [("id",""), ("class","")])
-                        $ parseTags . unlines . drop 1 . lines $ page
-          formatted = f $
-            fmap (scrapeItemListing rates itemUrl) listings
-          f xs = foldr g [] xs
-          g x xs = case x of Nothing -> xs
-                             Just x' -> (x':xs)
-
-findUnderpriced :: [ItemListing] ->
-    (Maybe [ItemListing], Maybe ItemListing)
-findUnderpriced [] = (Nothing, Nothing)
-findUnderpriced (x:[]) = (Nothing, Just x)
-findUnderpriced items = case under of Nothing -> (under, Just $ head items)
-                                      _ -> (under, Just $ head $
-                                            drop underLength items)
-    where under = f items []
-          underLength = case under of Nothing -> 0
-                                      Just xs -> length xs
-          f :: [ItemListing] -> [ItemListing] -> Maybe [ItemListing]
-          f [] _ = Nothing
-          f (x:[]) _ = Nothing
-          f (x:xs) []
-            | itemPrice x < priceBeforeFee (head xs) = Just (x:[])
-            | otherwise = f xs (x:[])
-          f (x:xs) under
-            | itemPrice x < priceBeforeFee (head xs) = Just (x:under)
-            | otherwise = f xs (x:under)
-
--- If listing is sold or has unknown currency return Nothing
-scrapeItemListing :: [CurrencyRate] -> String -> [Tag String] ->
-    Maybe ItemListing
-scrapeItemListing _ _ [] = Nothing
-scrapeItemListing rates itemUrl listing =
-    case fst price of (-1) -> Nothing
-                      _ -> Just (ItemListing listingNo itemUrl
-                            (fst price) (snd price))
-    where listingNo = scrapeListingNo listing
-          price = scrapePrice rates listing
-
-scrapeListingNo :: [Tag String] -> String
-scrapeListingNo [] = ""
-scrapeListingNo listing = filter isDigit $ getAttrib "id" listingNo
-    where listingNo = head . sections (~== "<div>") $ listing
-
--- Edge cases: "Sold!", "12,--"
-scrapePrice :: [CurrencyRate] -> [Tag String] -> (Int, Int)
-scrapePrice _ [] = ((-1), (-1))
-scrapePrice rates listing = (convert rates . trim $ getTagText price,
-    convert rates . trim $ getTagText priceBeforeFee)
-    where price = head . sections (~== "<span class=\
-                    \'market_listing_price market_\
-                    \listing_price_with_fee'>")
-                    $ listing
-          priceBeforeFee  = head . sections (~== "<span class=\
-                                \'market_listing_price market_\
-                                \listing_price_without_fee'>")
-                                $ listing
-
--- Util functions
-getAttrib :: String -> [Tag String] -> String
-getAttrib _ [] = ""
-getAttrib atr tag = fromAttrib atr . head . filter isTagOpen $ tag
-
-getTagText :: [Tag String] -> String
-getTagText [] = ""
-getTagText tag = fromTagText . head . filter isTagText $ tag
-
-trim :: String -> String
-trim [] = []
-trim (' ':xs) = trim xs
-trim (',':xs) = '.' : trim xs
-trim ('\n':xs) = trim xs
-trim ('\t':xs) = trim xs
-trim ('-':xs) = '0' : trim xs
-trim (x:xs) = x : trim xs
-
--- Convert the original listing currency to USD
--- Returns "-1" if Sold! or unknown currency
--- If using US proxy USD is not shown
-convert :: [CurrencyRate] -> String -> Int
-convert _ [] = (-1)
-convert rates price
-    | rub `isInfixOf` price = exchange rates "RUB" $ removeCurrency price rub
-    | gbp `isInfixOf` price = exchange rates "GBP" $ removeCurrency price gbp
-    | brl `isInfixOf` price = exchange rates "BRL" $ removeCurrency price brl
-    | eur `isInfixOf` price = exchange rates "EUR" $ removeCurrency price eur
-    | "USD" `isInfixOf` price = truncate $ (*) 100 $ read $ 
-        filter (\x -> isDigit x || '.' == x) price
-    | "$" `isInfixOf` price = truncate $ (*) 100 $ read $
-        filter (\x -> isDigit x || '.' == x) price
-    | otherwise = (-1)
-    where rub = eliminate $ Map.lookup "RUB" currencyMap
-          gbp = eliminate $ Map.lookup "GBP" currencyMap
-          brl = eliminate $ Map.lookup "BRL" currencyMap
-          eur = eliminate $ Map.lookup "EUR" currencyMap
-
-eliminate :: Maybe [a] -> [a]
-eliminate maybeValue = case maybeValue of (Just x) -> x
-                                          Nothing -> []
-
-exchange :: [CurrencyRate] -> String -> String -> Int
--- Multiply final result by 100 because we are storing value as int
-exchange rates cur price = truncate $ (*) 100 $ 
-    (read price) * (currencyRate rates cur)
-    where currencyRate (x:xs) cur
-            | currency x == cur = rate x
-            | otherwise = currencyRate xs cur
-
--- Remove the currency symbol from the price
-removeCurrency :: String -> String -> String
-removeCurrency [] _ = []
-removeCurrency price@(x:xs) [] = x : removeCurrency xs []
-removeCurrency price@(x:xs) currency@(y:ys)
-    | x == y = removeCurrency xs ys
-    | otherwise = x : removeCurrency xs currency
-
-getConnectInfo :: IO ConnectInfo
-getConnectInfo = do
-    val <- C.readfile C.emptyCP "sms.conf"
-    let cp = forceEither val
-    let database = forceEither $ C.get cp "DEFAULT" "database"
-    let db_host = forceEither $ C.get cp "DEFAULT" "db_host"
-    let db_port = forceEither $ C.get cp "DEFAULT" "db_port"
-    let db_user = forceEither $ C.get cp "DEFAULT" "db_user"
-    let db_pass = forceEither $ C.get cp "DEFAULT" "db_pass"
-    return $ ConnectInfo db_host db_port db_user db_pass database
