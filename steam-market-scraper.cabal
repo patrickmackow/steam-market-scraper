@@ -97,3 +97,9 @@ executable directory-watcher
                      , containers == 0.5.*
   ghc-options:         -threaded
   default-language:    Haskell2010
+
+executable file-scraper
+  main-is:             file-scraper.hs
+  build-depends:       base >= 4.6 && <4.7
+  ghc-options:         -threaded
+  default-language:    Haskell2010
