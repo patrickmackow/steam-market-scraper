@@ -33,7 +33,7 @@ data CurrencyRate = CurrencyRate
     } deriving (Show)
 
 instance FromJSON CurrencyRate where
-    arseJSON (Object v) = CurrencyRate <$>
+    parseJSON (Object v) = CurrencyRate <$>
                            v .: T.pack "currency" <*>
                            v .: T.pack "rate"
 
