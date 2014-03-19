@@ -14,5 +14,6 @@ csgo-listings
 rates.json
 proxies.txt
 sms.conf
-proxy-checker.conf
 conf.d/directory-watcher.conf
+conf.d/proxy-checker.conf
+scraper_status.log
