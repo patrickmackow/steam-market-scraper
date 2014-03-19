@@ -4,7 +4,7 @@ import Control.Monad
 import Data.Int
 import Data.List
 import Data.List.Split
-import Data.Time
+import Data.Time.Clock.POSIX
 import Database.PostgreSQL.Simple
 import Database.PostgreSQL.Simple.Types
 import System.Environment
@@ -101,7 +101,7 @@ scrapeListing sem url = do
 
 insertLastRun :: Connection -> IO Int64
 insertLastRun conn = do
-    datetime <- getCurrentTime
+    datetime <- getPOSIXTime
     let insert = Query $ B.pack $ "INSERT INTO last_run (latest_timestamp) \
         \VALUES ('" ++ (show datetime) ++ "')"
     execute_ conn insert
