@@ -3,6 +3,7 @@
 MARKET_TEST=market-page-test.js
 LISTING_TEST=market-listing-test.js
 DATE=$(date)
+EMAIL="patrickmackow@gmail.com"
 
 for i in {1..5}
 do
@@ -19,8 +20,7 @@ if [ "$FAILED" == true ]
 then
     echo "ERROR: Market page test failed 5 times $DATE" \
         >> scraper_status.log
-    tail -1 scraper_status.log | mailx -s "MARKET TESTS FAILED" \
-        patrickmackow@gmail.com
+    tail -1 scraper_status.log | mail -s "MARKET TESTS FAILED" "$EMAIL"
     exit 1
 fi
 
@@ -39,8 +39,7 @@ if [ "$FAILED" == true ]
 then
     echo "ERROR: Listing page test failed 5 times $DATE" >> \
         scraper_status.log
-    tail -1 scraper_status.log | mailx -s "LISTING TESTS FAILED" \
-        patrickmackow@gmail.com
+    tail -1 scraper_status.log | mail -s "LISTING TESTS FAILED" "$EMAIL"
     exit 1
 fi
 
