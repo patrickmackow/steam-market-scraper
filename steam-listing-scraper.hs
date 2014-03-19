@@ -1,6 +1,7 @@
 import Control.Concurrent
 import Control.Concurrent.SSem
 import Control.Monad
+import Data.Char
 import Data.Int
 import Data.List
 import Data.List.Split
@@ -102,8 +103,9 @@ scrapeListing sem url = do
 insertLastRun :: Connection -> IO Int64
 insertLastRun conn = do
     datetime <- getPOSIXTime
-    let insert = Query $ B.pack $ "INSERT INTO last_run (latest_timestamp) \
-        \VALUES ('" ++ (show datetime) ++ "')"
+    let timestamp = takeWhile isDigit $ show datetime
+        insert = Query $ B.pack $ "INSERT INTO last_run (latest_timestamp) \
+        \VALUES ('" ++ timestamp ++ "')"
     execute_ conn insert
 
 deleteAllUnderpriced :: Connection -> IO Int64
