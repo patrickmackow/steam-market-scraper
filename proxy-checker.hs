@@ -15,15 +15,14 @@ testUrl = "http://steamcommunity.com/market/listings/730/Sticker%20Capsule"
 main :: IO ()
 main = do
     configValues <- liftM forceEither $ C.readfile C.emptyCP
-        "proxy-checker.conf"
+        "conf.d/proxy-checker.conf"
     let api = forceEither $ C.get configValues "DEFAULT" "api"
     let timeout = splitOn "," $ forceEither $ C.get
             configValues "DEFAULT" "timeout"
     putStrLn api
     print timeout
 
-    removeFile "proxies.txt"
-    writeFile "proxies.txt" ""
+    writeFile "proxies.tmp" ""
 
     -- Get list of proxies from api
     proxyList <- openURL api
@@ -47,6 +46,7 @@ main = do
                 writeProxy split
                 threadDelay 100000
             else do
+                renameFile "proxies.tmp" "proxies.txt"
                 exitSuccess
 
 openURL :: String -> IO String
@@ -95,21 +95,21 @@ writeProxy ("":[]) = return ()
 writeProxy (timeout:proxy:[])
     | timeout == "-1" = return ()
     | otherwise = do
-        proxies <- readFile "proxies.txt"
+        proxies <- readFile "proxies.tmp"
         let proxies' = lines proxies
         if proxies' == []
             then do
                 let newProxies = (proxy:timeout:[])
-                writeFile "proxies.txt" $ unlines newProxies
+                writeFile "proxies.tmp" $ unlines newProxies
             else do
                 let time = last proxies'
                 if (read timeout :: Int) < (read time :: Int)
                     then do
                         let newProxies = (init proxies') ++ (proxy:time:[])
-                        writeFile "proxies.txt" $ unlines newProxies
+                        writeFile "proxies.tmp" $ unlines newProxies
                     else do
                         let newProxies = (init proxies') ++ (proxy:timeout:[])
-                        writeFile "proxies.txt" $ unlines newProxies
+                        writeFile "proxies.tmp" $ unlines newProxies
 
 modifyMin :: Int -> Int -> Int
 modifyMin new old
