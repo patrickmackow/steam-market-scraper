@@ -81,8 +81,10 @@ executable directory-watcher
   build-depends:       base >= 4.6 && <4.7
                      , ConfigFile == 1.1.*
                      , MissingH == 1.2.*
+                     , SafeSemaphore == 0.10.*
                      , containers == 0.5.*
                      , directory == 1.2.*
+                     , monad-loops == 0.4.*
                      , process == 1.1.*
                      , split == 0.2.*
                      , transformers == 0.3.*
