@@ -5,6 +5,8 @@ LISTING_TEST=market-listing-test.js
 DATE=$(date)
 EMAIL="patrickmackow@gmail.com"
 
+cd $HOME/projects/haskell/steam-market-scraper/
+
 for i in {1..5}
 do
     FAILED=true
