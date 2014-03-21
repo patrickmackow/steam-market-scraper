@@ -10,7 +10,7 @@ cd $HOME/projects/haskell/steam-market-scraper/
 for i in {1..5}
 do
     FAILED=true
-    casperjs test $MARKET_TEST
+    /usr/local/bin/casperjs test $MARKET_TEST
     if [ $? -eq 0 ]
     then
         FAILED=false
@@ -29,7 +29,7 @@ fi
 for i in {1..5}
 do
     FAILED=true
-    casperjs test $LISTING_TEST
+    /usr/local/bin/casperjs test $LISTING_TEST
     if [ $? -eq 0 ]
     then
         FAILED=false
