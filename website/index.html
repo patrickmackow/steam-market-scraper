@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Underpriced Steam Market Listings</title>
+    <link rel="stylesheet" type="text/css" href="/sms.css">
+    <script src="/sms.js"></script>
+</head>
+<body onload="load()">
+    <div id="update">Next scrape in <span id="scrape"></span> minutes...</div>
+    <form>
+        <input type="radio" name="quantity" id="single" value="single" checked>
+        <label for="single">Single</label>
+        <input type="radio" name="quantity" id="all" value="all">
+        <label for="all">All</label>
+        <input type="radio" name="quantity" id="excluded" value="excluded">
+        <label for="excluded">Excluded</label>
+    </form>
+    <div id="listings"></div>
+    <div id="status">Updating in <span id="count">5</span> seconds...</div>
+</body>
+</html>
